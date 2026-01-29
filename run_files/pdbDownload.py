@@ -33,7 +33,7 @@ def convert_mmcif_to_pdb(mmcif_filepath, protein):
         os.remove(f)
 
 def download_pdb_file(pdb_id):
-    pdb_dir = "pdbs"
+    pdb_dir = "pdb"
     final_pdb = os.path.join(pdb_dir, "{}.pdb".format(pdb_id))
     gz_file = os.path.join(pdb_dir, "pdb{}.ent.gz".format(pdb_id))
 
@@ -93,8 +93,7 @@ def download_pdb_file(pdb_id):
         return None
 
 def PDBdownloader():
-    preLeftTarget = []
-    preRightTarget = []
+    targets = []
 
     # Read pair list
     with open("input_pair_list.txt", "r") as filehnd:
@@ -102,58 +101,15 @@ def PDBdownloader():
             line = line.strip().split()
             if len(line) == 2:
                 if len(line[0]) >= 4 and len(line[1]) >= 4:
-                    preLeftTarget.append(line[0])
-                    preRightTarget.append(line[1])
+                    targets.append(line[0])
+                    targets.append(line[1])
 
     # Process PDB IDs
-    leftTarget = []
-    for pdb in preLeftTarget:
-        newPdb = pdb[:4].lower()
-        extra = sorted(set(pdb[4:]))
-        leftTarget.append(newPdb + ''.join(extra))
-
-    rightTarget = []
-    for pdb in preRightTarget:
-        newPdb = pdb[:4].lower()
-        extra = sorted(set(pdb[4:]))
-        rightTarget.append(newPdb + ''.join(extra))
-
-    # Remove duplicates
-    l, r, tt = [], [], []
-    for left, right in zip(leftTarget, rightTarget):
-        t = str(left) + str(right)
-        tr = str(right) + str(left)
-        if t not in tt:
-            tt.append(t)
-            tt.append(tr)
-            l.append(left)
-            r.append(right)
-
-    leftTarget, rightTarget = l, r
+    sorted_targets = list(set([pdb[:4].lower() + ''.join(sorted(set(pdb[4:]))) for pdb in targets]))
 
     # Download and process PDBs
-    leftList = []
-    rightList = []
-    for index in range(len(leftTarget)):
-        proteinNameLeft = leftTarget[index]
-        proteinNameRight = rightTarget[index]
-        check1 = False
-        check2 = False
+    for target in sorted_targets:
+        if not os.path.exists(os.path.join("pdb", target[:4] + ".pdb")):
+            download_pdb_file(target[:4])
 
-        # Process left protein
-        if not os.path.exists(os.path.join("pdbs", proteinNameLeft[:4] + ".pdb")):
-            check1 = download_pdb_file(proteinNameLeft[:4])
-        else:
-            check1 = True
-
-        # Process right protein
-        if not os.path.exists(os.path.join("pdbs", proteinNameRight[:4] + ".pdb")):
-            check2 = download_pdb_file(proteinNameRight[:4])
-        else:
-            check2 = True
-
-        if check1 and check2:
-            leftList.append(proteinNameLeft)
-            rightList.append(proteinNameRight)
-
-    return leftList, rightList
+    return sorted_targets

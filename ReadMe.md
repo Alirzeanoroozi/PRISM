@@ -1,3 +1,8 @@
+# Steps to run
+1. Get the `template.zip` from github and unzip that
+2. Get the `pdb.zip` from email
+
+
 # DB	
 $my_host = '172.20.31.92';
 $my_user = 'prismUser';
