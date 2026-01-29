@@ -1,0 +1,13 @@
+pdb/
+template/
+pdb.zip
+template.zip
+*.pyc
+.DS_Store
+logs/
+rosetta_output_1/
+surfaceExtract/
+flexibleRefinement/
+preprocess/
+surfaceExtract/
+flexibleRefinement/
