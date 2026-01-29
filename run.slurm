@@ -10,14 +10,10 @@
 #SBATCH --output=logs/comp.out
 #SBATCH --error=logs/comp.out
 
-# -p kutem_gpu -A kutem --qos=kutem --nodelist=rk02
-
 # Initialise environment and modules
 CONDA_BASE=$(conda info --base)
 source ${CONDA_BASE}/bin/activate bg
 export LD_LIBRARY_PATH=${CONDA_BASE}/lib
-
-nvidia-smi
 
 module load rosetta/2022.42
 python prism.py

@@ -1,27 +1,19 @@
-# written by Alper Baspinar
-
-from run_files.pdbDownload import PDBdownloader # pdbdownloader
-from run_files.templateGenerator import template_generator # templateGenerator
-from run_files.preProcessor import preprocess_input_proteins # preProcessor
-from run_files.surfaceExtractor import SurfaceExtractor # surfaceExtractor
-from run_files.structuralAlignmentTM import StructuralAligner # structuralAligner
-from run_files.transformationFiltering import TransformFilter # transformFiltering
-from run_files.flexibleRefinementRosetta import FlexibleRefinement # flexible refinement step
+from run_files.pdb_download import pdb_downloader
+from run_files.template_generate import template_generator
+from run_files.surfaceExtractor import SurfaceExtractor
+from run_files.structuralAlignmentTM import StructuralAligner
+from run_files.transformationFiltering import TransformFilter
+from run_files.flexibleRefinementRosetta import FlexibleRefinement
 
 print("PDB download stage started...")
-targets = PDBdownloader()
+targets = pdb_downloader()
 print('targets', targets)
 print("PDB download stage finished...")
 
-#checks template
+# check template
 print("Template generation stage started...")
 templates = template_generator()
 print("Template generation stage finished...")
-
-print("PreProcess stage started...")
-preprocess_input_proteins(targets)
-print('targets', targets)
-print("PreProcess stage finished...")
 
 print("SurfaceExtraction stage started...")
 SurfaceExtractor(targets).surfaceExtractor()
