@@ -1,3 +1,6 @@
+# paper link
+https://pmc.ncbi.nlm.nih.gov/articles/PMC7384353/pdf/nihms-1607029.pdf
+
 # Steps to run
 1. Get the `template.zip` from github and unzip that
 2. Get the `pdb.zip` from email
