@@ -16,6 +16,7 @@ https://pmc.ncbi.nlm.nih.gov/articles/PMC7384353/pdf/nihms-1607029.pdf
 # Steps to run
 1. Get the `template.zip` from github and unzip that
 2. Get the `pdb.zip` from email
+https://drive.google.com/file/d/1kZfTXfaip0B-J43E6HX8o7DsO_Ckg_7v/view
 
 # DB	
 $my_host = '172.20.31.92';
@@ -26,6 +27,10 @@ $my_db = 'prismDatabaseTMalignRosettaRemote';
 # Running commads
 ``` bash
 cd external_tools
+# for mac
+g++ -O3 -ffast-math -lm -o TMalign TMalign.cpp
+# for Linux
+g++ -static -O3 -ffast-math -lm -o TMalign TMalign.cpp
 chmod 755 TMalign
 cd naccess
 csh install.scr 

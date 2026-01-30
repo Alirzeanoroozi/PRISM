@@ -1,7 +1,7 @@
 from run_files.pdb_download import pdb_downloader
 from run_files.template_generate import template_generator
 from run_files.surface_extract import extract_surface
-from run_files.structuralAlignmentTM import StructuralAligner
+from run_files.alignment import align
 from run_files.transformationFiltering import TransformFilter
 from run_files.flexibleRefinementRosetta import FlexibleRefinement
 
@@ -20,7 +20,7 @@ extract_surface(targets)
 print("SurfaceExtraction stage finished...")
 
 print("Structural Alignment stage started...")
-StructuralAligner(targets, templates)
+align(targets, templates)
 print("Structural Alignment stage finished...")
 
 print("Transformation Filtering stage started...")
@@ -30,4 +30,3 @@ print("Transformation Filtering stage finished...")
 print("Flexible Refinement stage started...")
 energy_Structure = FlexibleRefinement().refiner()
 print("Flexible Refinement stage finished...")
-

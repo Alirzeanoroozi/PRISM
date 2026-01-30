@@ -1,20 +1,15 @@
-#!/usr/bin/env python
-
 import os
 import configparser
 from .fiberdockInterfaceExtractor import fiberdockInterfaceExtractor as fb
 
 class FlexibleRefinement:
-    def __init__(self, workPath, jobId):
+    def __init__(self):
         try:
-            self.workPath = workPath
-            self.jobId = jobId
             self.sizes = {}
             self.ca_Num = {}
             self.lastResidue = {}
             self.aDict = {}
-            self.currentPath = os.getcwd()
-            os.chdir(workPath)
+
             config = configparser.ConfigParser()  # reads configuration data
             config.read('prism.ini')
             self.rosettaprepack = config.get('External_Tools', 'rosettaprepack')
@@ -22,8 +17,6 @@ class FlexibleRefinement:
             self.rosettadb = config.get('External_Tools', 'rosettadb')
             self.rosettaIntScoreThreshold = config.getfloat('Flexible_Refinement', 'rosettaIntScoreThreshold')
             self.interfacePath = config.get('Structural_Alignment', 'interface_path')
-            self.pdbPath = os.path.abspath(config.get('Pdb_Folder', 'pdb_path'))  # defines where to download pdbs wrt workpath and changes into abs
-            self.out_folder = "%s/%s" % (config.get('Results_storage', 'output_folder'), self.jobId)
             self.global_ros = "../../%s" % (self.out_folder)
 
             if not os.path.exists("../../" + config.get('Results_storage', 'output_folder')):
@@ -38,7 +31,6 @@ class FlexibleRefinement:
                 os.makedirs("flexibleRefinement/structures", exist_ok=True)
         except Exception as e:
             print("Exception during initialization: %s" % str(e))
-            os.chdir(self.currentPath)
 
     def refiner(self):
         try:
@@ -70,11 +62,9 @@ class FlexibleRefinement:
                 os.system("cp %s %s/refinement_energies" % (energyFile, self.global_ros))
                 os.system("chmod 775 %s" % (predFile))
 
-            os.chdir(self.currentPath)
             return energy_Structure
         except Exception as e:
             print("Exception during refiner: %s" % str(e))
-            os.chdir(self.currentPath)
             return []
 
     def calculateEnergy(self, passed0, passed1):
