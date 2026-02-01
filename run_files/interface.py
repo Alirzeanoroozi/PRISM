@@ -1,6 +1,7 @@
 import os
 from Bio.PDB import PDBParser
-import shutil
+import pickle
+from utils import vdw_radii_extended, distance_calculator
 
 # Nearby residue cutoff: Cα of non-interacting residue within this distance of an interacting residue (same chain)
 NEARBY_CA_CUTOFF = 6.0  # Å
@@ -8,62 +9,27 @@ NEARBY_CA_CUTOFF = 6.0  # Å
 # Default vdW radius for atoms not in residue-specific dict (Å)
 DEFAULT_VDW = 1.80
 
-def _distance(coords1, coords2):
-    return (
-        (coords1[0] - coords2[0]) ** 2
-        + (coords1[1] - coords2[1]) ** 2
-        + (coords1[2] - coords2[2]) ** 2
-    ) ** 0.5
+OUTPUT_DIR = "templates/interfaces"
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-def _vdw_radii_extended(res_name):
-    """Per-residue, per-atom van der Waals radii (Å)."""
-    d = {
-        "ALA": {"N": 1.65, "CA": 1.87, "C": 1.76, "O": 1.40, "CB": 1.87, "OXT": 1.40},
-        "ARG": {"N": 1.65, "CA": 1.87, "C": 1.76, "O": 1.40, "CB": 1.87, "CG": 1.87, "CD": 1.87, "NE": 1.65, "CZ": 1.76, "NH1": 1.65, "NH2": 1.65, "OXT": 1.40},
-        "ASP": {"N": 1.65, "CA": 1.87, "C": 1.76, "O": 1.40, "CB": 1.87, "CG": 1.76, "OD1": 1.40, "OD2": 1.40, "OXT": 1.40},
-        "ASN": {"N": 1.65, "CA": 1.87, "C": 1.76, "O": 1.40, "CB": 1.87, "CG": 1.76, "OD1": 1.40, "ND2": 1.65, "OXT": 1.40},
-        "CYS": {"N": 1.65, "CA": 1.87, "C": 1.76, "O": 1.40, "CB": 1.87, "SG": 1.85, "OXT": 1.40},
-        "GLU": {"N": 1.65, "CA": 1.87, "C": 1.76, "O": 1.40, "CB": 1.87, "CG": 1.87, "CD": 1.76, "OE1": 1.40, "OE2": 1.40, "OXT": 1.40},
-        "GLN": {"N": 1.65, "CA": 1.87, "C": 1.76, "O": 1.40, "CB": 1.87, "CG": 1.87, "CD": 1.76, "OE1": 1.40, "NE2": 1.65, "OXT": 1.40},
-        "GLY": {"N": 1.65, "CA": 1.87, "C": 1.76, "O": 1.40, "OXT": 1.40},
-        "HIS": {"N": 1.65, "CA": 1.87, "C": 1.76, "O": 1.40, "CB": 1.87, "CG": 1.76, "ND1": 1.65, "CD2": 1.76, "CE1": 1.76, "NE2": 1.65, "OXT": 1.40},
-        "ILE": {"N": 1.65, "CA": 1.87, "C": 1.76, "O": 1.40, "CB": 1.87, "CG1": 1.87, "CG2": 1.87, "CD1": 1.87, "OXT": 1.40},
-        "LEU": {"N": 1.65, "CA": 1.87, "C": 1.76, "O": 1.40, "CB": 1.87, "CG": 1.87, "CD1": 1.87, "CD2": 1.87, "OXT": 1.40},
-        "LYS": {"N": 1.65, "CA": 1.87, "C": 1.76, "O": 1.40, "CB": 1.87, "CG": 1.87, "CD": 1.87, "CE": 1.87, "NZ": 1.50, "OXT": 1.40},
-        "MET": {"N": 1.65, "CA": 1.87, "C": 1.76, "O": 1.40, "CB": 1.87, "CG": 1.87, "SD": 1.85, "CE": 1.87, "OXT": 1.40},
-        "PHE": {"N": 1.65, "CA": 1.87, "C": 1.76, "O": 1.40, "CB": 1.87, "CG": 1.76, "CD1": 1.76, "CD2": 1.76, "CE1": 1.76, "CE2": 1.76, "CZ": 1.76, "OXT": 1.40},
-        "PRO": {"N": 1.65, "CA": 1.87, "C": 1.76, "O": 1.40, "CB": 1.87, "CG": 1.87, "CD": 1.87, "OXT": 1.40},
-        "SER": {"N": 1.65, "CA": 1.87, "C": 1.76, "O": 1.40, "CB": 1.87, "OG": 1.40, "OXT": 1.40},
-        "THR": {"N": 1.65, "CA": 1.87, "C": 1.76, "O": 1.40, "CB": 1.87, "OG1": 1.40, "CG2": 1.87, "OXT": 1.40},
-        "TRP": {"N": 1.65, "CA": 1.87, "C": 1.76, "O": 1.40, "CB": 1.87, "CG": 1.76, "CD1": 1.76, "CD2": 1.76, "NE1": 1.65, "CE2": 1.76, "CE3": 1.76, "CZ2": 1.76, "CZ3": 1.76, "CH2": 1.76, "OXT": 1.40},
-        "TYR": {"N": 1.65, "CA": 1.87, "C": 1.76, "O": 1.40, "CB": 1.87, "CG": 1.76, "CD1": 1.76, "CD2": 1.76, "CE1": 1.76, "CE2": 1.76, "CZ": 1.76, "OH": 1.40, "OXT": 1.40},
-        "VAL": {"N": 1.65, "CA": 1.87, "C": 1.76, "O": 1.40, "CB": 1.87, "CG1": 1.87, "CG2": 1.87, "OXT": 1.40},
-    }
-    return d.get(res_name, {"N": 1.65, "CA": 1.87, "C": 1.76, "O": 1.40})
+interface_dir = "templates/interfaces_lists"
+os.makedirs(interface_dir, exist_ok=True)
+
+NEW_PDBS_DIr = "pdbs_interfaces"
+os.makedirs(NEW_PDBS_DIr, exist_ok=True)
+
 
 def _format_pdb_line(atom_serial, atom_name, res_name, chain_id, res_seq, x, y, z, occupancy=1.00, bfactor=0.00, element="C"):
     """Format a single ATOM line. atom_name should be 4 chars (e.g. ' CA ')."""
     return (
-        f"ATOM  {atom_serial:5d} {atom_name:4s}{res_name:3s} {chain_id}{res_seq:4d}    "
+        f"ATOM  {atom_serial:5d} {atom_name:4s} {res_name:3s} {chain_id}{res_seq:4d}    "
         f"{x:8.3f}{y:8.3f}{z:8.3f}{occupancy:6.2f}{bfactor:6.2f}           {element:2s}  \n"
     )
 
-def generate_interface(protein, chain1, chain2, pdb_dir="pdb", output_dir="interface"):
-    # Also copy the original pdb file to the output_dir
-    protein_lower = protein.lower().strip()
-    pdb_path = os.path.join(pdb_dir, f"{protein_lower}.pdb")
-    output_pdb_path = os.path.join(output_dir, f"{protein_lower}.pdb")
-    shutil.copy2(pdb_path, output_pdb_path)
-    
-    protein_lower = protein.lower().strip()
-    pdb_path = os.path.join(pdb_dir, f"{protein_lower}.pdb")
-    if not os.path.isfile(pdb_path):
-        raise FileNotFoundError(f"PDB file not found: {pdb_path}")
-
-    os.makedirs(output_dir, exist_ok=True)
-    label = f"{protein_lower}{chain1}{chain2}"
+def generate_interface(protein, chain1, chain2):
+    label = f"{protein}{chain1}{chain2}"
     parser = PDBParser(QUIET=True)
-    structure = parser.get_structure(protein_lower, pdb_path)
+    structure = parser.get_structure(protein, f"pdbs/{protein}.pdb")
 
     # Collect all atoms (and Cα) for the two chains
     # chain_data[c][res_seq] = list of (atom_name, coords, vdw)
@@ -82,7 +48,7 @@ def generate_interface(protein, chain1, chain2, pdb_dir="pdb", output_dir="inter
                 if hetflag != " ":
                     continue
                 res_name = residue.get_resname()
-                vdw_map = _vdw_radii_extended(res_name)
+                vdw_map = vdw_radii_extended(res_name)
                 atoms = []
                 ca_coords = None
                 for atom in residue:
@@ -108,7 +74,7 @@ def generate_interface(protein, chain1, chain2, pdb_dir="pdb", output_dir="inter
                     if name2[0] == "H":
                         continue
                     cutoff = vdw1 + vdw2 + 0.5
-                    if _distance(coords1, coords2) <= cutoff:
+                    if distance_calculator(coords1, coords2) <= cutoff:
                         interacting1.add(res_seq1)
                         interacting2.add(res_seq2)
                         break
@@ -126,7 +92,7 @@ def generate_interface(protein, chain1, chain2, pdb_dir="pdb", output_dir="inter
             rname, ca_coords = ca_dict[res_seq]
             for other_seq in interact:
                 _, other_ca = ca_dict[other_seq]
-                if _distance(ca_coords, other_ca) <= NEARBY_CA_CUTOFF:
+                if distance_calculator(ca_coords, other_ca) <= NEARBY_CA_CUTOFF:
                     interact.add(res_seq)
                     break
 
@@ -137,8 +103,8 @@ def generate_interface(protein, chain1, chain2, pdb_dir="pdb", output_dir="inter
     interface_res2 = interacting2
 
     # Write Cα-only PDB files (interface residues only, one file per chain)
-    ca_path1 = os.path.join(output_dir, f"{label}_{chain1}.pdb")
-    ca_path2 = os.path.join(output_dir, f"{label}_{chain2}.pdb")
+    ca_path1 = os.path.join(OUTPUT_DIR, f"{label}_{chain1}_int.pdb")
+    ca_path2 = os.path.join(OUTPUT_DIR, f"{label}_{chain2}_int.pdb")
     serial = 1
     with open(ca_path1, "w") as f1:
         for res_seq in sorted(chain_ca[chain1].keys()):
@@ -157,7 +123,7 @@ def generate_interface(protein, chain1, chain2, pdb_dir="pdb", output_dir="inter
             serial += 1
 
     # Write full PDB with bFactor = 1 for interface, 0 for non-interface
-    bfactor_path = os.path.join(output_dir, f"{label}_bfactor.pdb")
+    bfactor_path = os.path.join(NEW_PDBS_DIr, f"{label}_bfactor.pdb")
     lines_out = []
     serial = 1
     for model in structure:
@@ -170,7 +136,7 @@ def generate_interface(protein, chain1, chain2, pdb_dir="pdb", output_dir="inter
                 hetflag, res_seq, icode = residue.id
                 if hetflag != " ":
                     continue
-                bfactor_val = 1.0 if res_seq in interface_set else 0.0
+                bfactor_val = 99.0 if res_seq in interface_set else 0.0
                 for atom in residue:
                     name = atom.get_name()
                     coords = atom.get_coord()
@@ -190,6 +156,11 @@ def generate_interface(protein, chain1, chain2, pdb_dir="pdb", output_dir="inter
     with open(bfactor_path, "w") as f:
         f.writelines(lines_out)
         f.write("END\n")
+        
+    with open(os.path.join(interface_dir, f"{label}_{chain1}.txt"), "w") as f:
+        pickle.dump(interface_res1, f)
+    with open(os.path.join(interface_dir, f"{label}_{chain2}.txt"), "w") as f:
+        pickle.dump(interface_res2, f)
 
     return {
         "ca_chain1": ca_path1,
@@ -200,5 +171,9 @@ def generate_interface(protein, chain1, chain2, pdb_dir="pdb", output_dir="inter
     }
 
 if __name__ == "__main__":
-    result = generate_interface("1a28", "A", "B", pdb_dir="pdb", output_dir="interface")
+    protein = "1a28"
+    chain1 = "A"
+    chain2 = "B"
+    result = generate_interface(protein, chain1, chain2)
+    os.system(f"external_tools/TMalign {result['bfactor_pdb']} pdbs/{protein}.pdb -m alignment/matrix.out > alignment/out.tm")
     print(result)

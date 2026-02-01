@@ -1,6 +1,3 @@
-# written by Alper Baspinar
-# updated with RCSB API by Konuralp ilim
-
 import os
 import subprocess, glob
 import os
