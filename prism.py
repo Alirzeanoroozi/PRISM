@@ -10,7 +10,6 @@ targets = pdb_downloader()
 print('targets', targets)
 print("PDB download stage finished...")
 
-# check template
 print("Template generation stage started...")
 templates = template_generator()
 print("Template generation stage finished...")

@@ -5,7 +5,8 @@ import pickle
 from Bio.PDB import PDBParser
 from Bio.PDB.Polypeptide import is_aa
 
-from utils import distance_calculator, three2one, standard_data, ATOM_DICT, PAIR_POTENTIAL
+from utils import distance_calculator, three2one, ATOM_DICT, PAIR_POTENTIAL
+from naccess_utils import get_asa_complex
 
 RELATIVE_ASA_THRESHOLD = 20.0
 CONTACT_POTENTIAL_THRESHOLD = 18.0
@@ -15,12 +16,12 @@ CONTACT_DISTANCE_THRESHOLD = 7.0
 HOTSPOT_DIR = "templates/hotspots"
 os.makedirs(HOTSPOT_DIR, exist_ok=True)
 
-SURFACE_DIR = "templates/rsas"
-os.makedirs(SURFACE_DIR, exist_ok=True)
+RSA_DIR = "templates/rsas"
+os.makedirs(RSA_DIR, exist_ok=True)
 
 def hotspot_creator(template):
     protein, chain_id1, chain_id2 = template[:4].lower(), template[4], template[5]
-    asa_complex = get_asa_complex(template)
+    asa_complex = get_asa_complex(template, RSA_DIR)
     contact_potentials = get_contact_potentials(protein, chain_id1, chain_id2)
 
     hotspot_dict = {chain_id1: [], chain_id2: []}
@@ -100,30 +101,6 @@ def fetch_all_atoms_coordinates(protein, chain1, chain2):
                 # assert len(all_atoms[f"{residue_name}_{residue_number}_{chain_id}"]) == len(ATOM_DICT[residue_name])
     return all_atoms
 
-def get_asa_complex(template):
-    run_naccess(template)
-    
-    asa_complex = {}    
-    with open(f"{SURFACE_DIR}/{template}.rsa", 'r') as f:
-        for rsaline in f.readlines():
-            if rsaline.startswith("RES"):
-                items = rsaline.split()
-                residue_name = items[1]
-                standard = standard_data(residue_name)
-                if standard != -1:
-                    chain = items[2]
-                    residue_number = items[3]
-                    absolute_asa = float(items[4])
-                    relative_asa = absolute_asa * 100 / standard
-                    asa_complex[f"{residue_name}_{residue_number}_{chain}"] = relative_asa    
-    
-    return asa_complex
-
-def run_naccess(template):
-    os.system(f"external_tools/naccess/naccess pdbs/{template[:4].lower()}.pdb")
-    os.rename(f"{template[:4].lower()}.rsa", f"{SURFACE_DIR}/{template}.rsa")
-    os.remove(f"{template[:4].lower()}.asa")
-    os.remove(f"{template[:4].lower()}.log")
 
 if __name__ == "__main__":
     template = "1a28AB"

@@ -2,6 +2,7 @@ import os
 from Bio.PDB import PDBParser
 import pickle
 from utils import vdw_radii_extended, distance_calculator
+from Bio.PDB.Polypeptide import is_aa
 
 # Nearby residue cutoff: Cα of non-interacting residue within this distance of an interacting residue (same chain)
 NEARBY_CA_CUTOFF = 6.0  # Å
@@ -9,15 +10,14 @@ NEARBY_CA_CUTOFF = 6.0  # Å
 # Default vdW radius for atoms not in residue-specific dict (Å)
 DEFAULT_VDW = 1.80
 
-OUTPUT_DIR = "templates/interfaces"
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+INTERFACE_DIR = "templates/interfaces"
+os.makedirs(INTERFACE_DIR, exist_ok=True)
 
-interface_dir = "templates/interfaces_lists"
-os.makedirs(interface_dir, exist_ok=True)
+INTERFACE_LIST_DIR = "templates/interfaces_lists"
+os.makedirs(INTERFACE_LIST_DIR, exist_ok=True)
 
-NEW_PDBS_DIr = "pdbs_interfaces"
-os.makedirs(NEW_PDBS_DIr, exist_ok=True)
-
+BFACTOR_DIR = "templates/bfactor_pdbs"
+os.makedirs(BFACTOR_DIR, exist_ok=True)
 
 def _format_pdb_line(atom_serial, atom_name, res_name, chain_id, res_seq, x, y, z, occupancy=1.00, bfactor=0.00, element="C"):
     """Format a single ATOM line. atom_name should be 4 chars (e.g. ' CA ')."""
@@ -42,7 +42,7 @@ def generate_interface(protein, chain1, chain2):
             if chain.id not in (chain1, chain2):
                 continue
             for residue in chain:
-                if not hasattr(residue, "id"):
+                if not is_aa(residue, standard=True):
                     continue
                 hetflag, res_seq, icode = residue.id
                 if hetflag != " ":
@@ -103,8 +103,8 @@ def generate_interface(protein, chain1, chain2):
     interface_res2 = interacting2
 
     # Write Cα-only PDB files (interface residues only, one file per chain)
-    ca_path1 = os.path.join(OUTPUT_DIR, f"{label}_{chain1}_int.pdb")
-    ca_path2 = os.path.join(OUTPUT_DIR, f"{label}_{chain2}_int.pdb")
+    ca_path1 = os.path.join(INTERFACE_DIR, f"{label}_{chain1}_int.pdb")
+    ca_path2 = os.path.join(INTERFACE_DIR, f"{label}_{chain2}_int.pdb")
     serial = 1
     with open(ca_path1, "w") as f1:
         for res_seq in sorted(chain_ca[chain1].keys()):
@@ -123,7 +123,7 @@ def generate_interface(protein, chain1, chain2):
             serial += 1
 
     # Write full PDB with bFactor = 1 for interface, 0 for non-interface
-    bfactor_path = os.path.join(NEW_PDBS_DIr, f"{label}_bfactor.pdb")
+    bfactor_path = os.path.join(BFACTOR_DIR, f"{label}_bfactor.pdb")
     lines_out = []
     serial = 1
     for model in structure:
@@ -131,11 +131,9 @@ def generate_interface(protein, chain1, chain2):
             cid = chain.id
             interface_set = interface_res1 if cid == chain1 else (interface_res2 if cid == chain2 else set())
             for residue in chain:
-                if not hasattr(residue, "id"):
+                if not is_aa(residue, standard=True):
                     continue
-                hetflag, res_seq, icode = residue.id
-                if hetflag != " ":
-                    continue
+                res_seq = residue.id[1]
                 bfactor_val = 99.0 if res_seq in interface_set else 0.0
                 for atom in residue:
                     name = atom.get_name()
@@ -157,9 +155,9 @@ def generate_interface(protein, chain1, chain2):
         f.writelines(lines_out)
         f.write("END\n")
         
-    with open(os.path.join(interface_dir, f"{label}_{chain1}.txt"), "w") as f:
+    with open(os.path.join(INTERFACE_LIST_DIR, f"{label}_{chain1}.txt"), "w") as f:
         pickle.dump(interface_res1, f)
-    with open(os.path.join(interface_dir, f"{label}_{chain2}.txt"), "w") as f:
+    with open(os.path.join(INTERFACE_LIST_DIR, f"{label}_{chain2}.txt"), "w") as f:
         pickle.dump(interface_res2, f)
 
     return {
