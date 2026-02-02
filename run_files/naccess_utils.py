@@ -1,7 +1,7 @@
 import os
 from utils import standard_data
 
-def get_relative_asa_complex(template, save_directory):
+def get_asa_complex(template, save_directory):
     run_naccess(template, save_directory)
     
     relative_asa_complex = {}    
@@ -20,23 +20,8 @@ def get_relative_asa_complex(template, save_directory):
     
     return relative_asa_complex
 
-def get_absolute_asa_complex(template, save_directory):
-    run_naccess(template, save_directory)
-    
-    absolute_asa_complex = {}    
-    with open(f"{save_directory}/{template}.asa", 'r') as f:
-        for asaline in f.readlines():
-            if asaline.startswith("ATOM"):
-                items = asaline.split()
-                residue_name = items[3]
-                residue_number = items[4]
-                chain = items[5]
-                absolute_asa_complex[f"{residue_name}_{residue_number}_{chain}"] = [items[6], items[7], items[8]]
-    
-    return absolute_asa_complex
-
 def run_naccess(template, save_directory):
     os.system(f"external_tools/naccess/naccess pdbs/{template[:4].lower()}.pdb")
     os.rename(f"{template[:4].lower()}.rsa", f"{save_directory}/{template}.rsa")
-    os.rename(f"{template[:4].lower()}.asa", f"{save_directory}/{template}.asa")
+    os.remove(f"{template[:4].lower()}.asa")
     os.remove(f"{template[:4].lower()}.log")
