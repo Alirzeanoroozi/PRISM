@@ -12,11 +12,9 @@ SCFFTHRESHOLD = 1.4
 SURFACE_EXTRACTION_DIR = "surface_extraction"
 os.makedirs(SURFACE_EXTRACTION_DIR, exist_ok=True)
 
-
 def extract_surfaces(queries):
     for protein in queries:
         extract_surface(protein)
-
 
 def extract_surface(protein):
     asa_complex = get_asa_complex(protein, SURFACE_EXTRACTION_DIR)
@@ -76,7 +74,6 @@ def extract_surface(protein):
         f.write("END\n")
 
     return {i: line for i, line in enumerate(asa_ca_lines)}
-
 
 def _format_ca_pdb_line(serial, res_name, chain_id, res_seq, x, y, z):
     """Format a CA ATOM line for PDB output."""

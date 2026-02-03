@@ -1,6 +1,6 @@
 import os
-import pickle
 from Bio.PDB import PDBParser
+import json
 
 os.makedirs("alignment", exist_ok=True)
 
@@ -17,12 +17,15 @@ def align(queries, templates):
                 parse_tmalign(protein_path, interface_path, protein, template, chain)
 
     if os.path.exists("alignment/matrix.out"):
-        os.system("rm alignment/matrix.out")
+        os.remove("alignment/matrix.out")
     
+    if os.path.exists("alignment/out.tm"):
+        os.remove("alignment/out.tm")
+
 def parse_tmalign(protein_path, interface_path, protein, template, chain):
     with open("alignment/matrix.out", "r") as matrix_file:
         translation = [0.0, 0.0, 0.0]
-        rotationMat = [[0.0, 0.0, 0.0] for _ in range(3)]
+        rotation_mat = [[0.0, 0.0, 0.0] for _ in range(3)]
 
         for line in matrix_file:
             tokens = line.strip().split()
@@ -39,57 +42,79 @@ def parse_tmalign(protein_path, interface_path, protein, template, chain):
             # tokens[0]: row (0,1,2); tokens[1]: t[m]; tokens[2-4]: u[m][0:2]
             if row_index in (0, 1, 2):
                 translation[row_index] = float(tokens[1])
-                rotationMat[row_index][0] = float(tokens[2])
-                rotationMat[row_index][1] = float(tokens[3])
-                rotationMat[row_index][2] = float(tokens[4])
+                rotation_mat[row_index][0] = float(tokens[2])
+                rotation_mat[row_index][1] = float(tokens[3])
+                rotation_mat[row_index][2] = float(tokens[4])
 
     with open("alignment/out.tm", "r") as tm_file:
-        matchDict = {}
-        tmscore1 = 0
-        tmscore2 = 0
+        match_dict = {}
+        tm_score_1 = 0.0
+        tm_score_2 = 0.0
+        match_count = 0
+        seq1 = []
+        match = []
+        seq2 = []
+
         for line in tm_file:
             if line.startswith("Aligned length"):
-                matchcount = int(line.split("=")[1].split(",")[0])
+                match_count = int(line.split("=")[1].split(",")[0].strip())
             elif line.startswith("TM-score"):
                 tmscore = float(line.split()[1])
-                if line.strip()[-8:-1] == "Chain_1":
-                    tmscore1 = tmscore
-                if line.strip()[-8:-1] == "Chain_2":
-                    tmscore2 = tmscore
-            elif line.startswith("(\":\""):
-                line = tmOuthnd.readline() #sequence 1
-                seq1 = list(line)
-                line = tmOuthnd.readline() #matching line
-                match = list(line)
-                line = tmOuthnd.readline() #sequence 2
-                seq2 = list(line)
+                if "Chain_1" in line:
+                    tm_score_1 = tmscore
+                elif "Chain_2" in line:
+                    tm_score_2 = tmscore
+            elif line.startswith('(":"'):
+                # Next 3 lines: seq1 (Chain_1), match line, seq2 (Chain_2)
+                seq1 = list(tm_file.readline().rstrip("\n"))
+                match = list(tm_file.readline().rstrip("\n"))
+                seq2 = list(tm_file.readline().rstrip("\n"))
+                break
 
-        seq1ResIDs, seq1chainIDs = extract_chain_and_res_ids("protein", protein_path)
-        seq2ResIDs, seq2chainIDs = extract_chain_and_res_ids("interface", interface_path)
+        seq1_res_ids, seq1_chain_ids = extract_chain_and_res_ids("protein", protein_path)
+        seq2_res_ids, seq2_chain_ids = extract_chain_and_res_ids("interface", interface_path)
         index1 = 0
-        index2 = 0    
-        for s, i in zip(match, range(len(match))):
-            if s == ":" or s == ".": 
-                seq1String =  seq1chainIDs[index1] + "." + seq1[i] + "." + seq1ResIDs[index1]
-                seq2String =  seq2chainIDs[index2] + "." + seq2[i] + "." + seq2ResIDs[index2] # Reference Model
-                matchDict[seq2String] = seq1String
+        index2 = 0
+        for i, s in enumerate(match):
+            if s == ":" or s == ".":
+                seq1_str = seq1_chain_ids[index1] + "." + seq1[i] + "." + seq1_res_ids[index1]
+                seq2_str = seq2_chain_ids[index2] + "." + seq2[i] + "." + seq2_res_ids[index2]
+                match_dict[seq2_str] = seq1_str
             if seq1[i] != "-":
                 index1 += 1
             if seq2[i] != "-":
                 index2 += 1
 
-    multi_dict = [matchcount, translation, rotationMat, matchDict, max(tmscore1, tmscore2)]
-    pickle.dump(multi_dict, open(f"alignment/{protein}_{template}_{chain}.pkl", "wb"), protocol=2)
+    multi_dict = {
+        "match_count": match_count,
+        "translation": translation,
+        "rotation_mat": rotation_mat,
+        "match_dict": match_dict,
+        "tm_score": max(tm_score_1, tm_score_2)
+    }
+    with open(f"alignment/{protein}_{template}_{chain}.json", "w") as f:
+        json.dump(multi_dict, f)
 
 def extract_chain_and_res_ids(name, path):
     parser = PDBParser(QUIET=True)
     structure = parser.get_structure(name, path)
-    resIDs = []
-    chainIDs = []
+    residue_ids = []
+    chain_id = []
     for model in structure:
         for chain in model:
             for residue in chain:
                 if 'CA' in residue:
-                    resIDs.append(str(residue.id[1]))
-                    chainIDs.append(chain.id)
-    return resIDs, chainIDs
+                    residue_ids.append(str(residue.id[1]))
+                    chain_id.append(chain.id)
+    return residue_ids, chain_id
+
+if __name__ == "__main__":
+    protein = "1a28"
+    template = "1a28AB"
+    chains = ["A", "B"]
+    align([protein], [template])
+    for chain in chains:
+        data = json.load(open(f"alignment/{protein}_{template}_{chain}.json", "r"))
+        print(f"--- {protein}_{template}_{chain} ---")
+        print(data)
+        print()

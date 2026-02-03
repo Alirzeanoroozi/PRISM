@@ -1,3 +1,6 @@
+# TODO:
+    - the input target should be converted to single chain and then calculate the surfaces.
+
 # Hotspot
 In this protocol, we use the HotPoint web server48 to predict hot spots in template protein interfaces, which is freely available to all users. HotPoint labels a residue as a hot spot if it is buried (its relative accessibility is less than 20%, as determined by Naccess) and its total contact potential (with respect to its neighbors within a radius of 7.0 Å) is large (more than 18.0).
 
