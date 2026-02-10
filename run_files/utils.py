@@ -1,5 +1,24 @@
+import os
+from Bio.PDB import PDBParser
+
 def distance_calculator(coordinates1, coordinates2):
     return ((float(coordinates1[0]) - float(coordinates2[0]))**2 + (float(coordinates1[1]) - float(coordinates2[1]))**2 + (float(coordinates1[2]) - float(coordinates2[2]))**2)**0.5
+
+def read_ca_coordinates(path):
+    parser = PDBParser(QUIET=True)
+    ca_coordinates = []
+    if not os.path.exists(path):
+        return ca_coordinates
+    structure = parser.get_structure("target", path)
+    for model in structure:
+        for chain in model:
+            for residue in chain:
+                if "CA" in residue:
+                    ca_atom = residue["CA"]
+                    coord = list(ca_atom.get_coord())
+                    ca_coordinates.append(coord)
+    return ca_coordinates
+
 
 def three2one(res_name):
     return {
@@ -124,3 +143,8 @@ def standard_data(resname):
         'TRP':249.36,
         'TYR':212.76
     }.get(resname, -1)
+    
+STANDARD_AA = frozenset({
+    "ALA", "ARG", "ASN", "ASP", "CYS", "GLN", "GLU", "GLY", "HIS", "ILE",
+    "LEU", "LYS", "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL",
+})

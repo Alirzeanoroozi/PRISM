@@ -2,28 +2,28 @@ import os
 from Bio.PDB import PDBParser
 import json
 
-os.makedirs("alignment", exist_ok=True)
+os.makedirs("processed/alignment", exist_ok=True)
 
 def align(queries, templates):
     for protein in queries:
         for template in templates:
             for chain in template[4:]:
-                protein_path = f"surface_extraction/{protein}.asa.pdb"
-                interface_path = f"template/interface/{template}_{chain}.int"
+                protein_path = f"processed/surface_extraction/{protein}.asa.pdb"
+                interface_path = f"templates/interfaces/{template}_{chain}_int.pdb"
                 try:
-                    os.system(f"external_tools/TMalign {protein_path} {interface_path} -m alignment/matrix.out > alignment/out.tm")
+                    os.system(f"external_tools/TMalign {protein_path} {interface_path} -m processed/alignment/matrix.out > processed/alignment/out.tm")
                 except:
                     print(f"TM-align did not run for {protein} and {template}_{chain}.")
                 parse_tmalign(protein_path, interface_path, protein, template, chain)
 
-    if os.path.exists("alignment/matrix.out"):
-        os.remove("alignment/matrix.out")
+    if os.path.exists("processed/alignment/matrix.out"):
+        os.remove("processed/alignment/matrix.out")
     
-    if os.path.exists("alignment/out.tm"):
-        os.remove("alignment/out.tm")
+    if os.path.exists("processed/alignment/out.tm"):
+        os.remove("processed/alignment/out.tm")
 
 def parse_tmalign(protein_path, interface_path, protein, template, chain):
-    with open("alignment/matrix.out", "r") as matrix_file:
+    with open("processed/alignment/matrix.out", "r") as matrix_file:
         translation = [0.0, 0.0, 0.0]
         rotation_mat = [[0.0, 0.0, 0.0] for _ in range(3)]
 
@@ -46,7 +46,7 @@ def parse_tmalign(protein_path, interface_path, protein, template, chain):
                 rotation_mat[row_index][1] = float(tokens[3])
                 rotation_mat[row_index][2] = float(tokens[4])
 
-    with open("alignment/out.tm", "r") as tm_file:
+    with open("processed/alignment/out.tm", "r") as tm_file:
         match_dict = {}
         tm_score_1 = 0.0
         tm_score_2 = 0.0
@@ -92,7 +92,7 @@ def parse_tmalign(protein_path, interface_path, protein, template, chain):
         "match_dict": match_dict,
         "tm_score": max(tm_score_1, tm_score_2)
     }
-    with open(f"alignment/{protein}_{template}_{chain}.json", "w") as f:
+    with open(f"processed/alignment/{protein}_{template}_{chain}.json", "w") as f:
         json.dump(multi_dict, f)
 
 def extract_chain_and_res_ids(name, path):
@@ -114,7 +114,7 @@ if __name__ == "__main__":
     chains = ["A", "B"]
     align([protein], [template])
     for chain in chains:
-        data = json.load(open(f"alignment/{protein}_{template}_{chain}.json", "r"))
+        data = json.load(open(f"processed/alignment/{protein}_{template}_{chain}.json", "r"))
         print(f"--- {protein}_{template}_{chain} ---")
         print(data)
         print()

@@ -1,7 +1,7 @@
 import os
 from Bio.PDB import PDBParser
 import json
-from utils import vdw_radii_extended, distance_calculator
+from .utils import vdw_radii_extended, distance_calculator
 from Bio.PDB.Polypeptide import is_aa
 
 # Nearby residue cutoff: Cα of non-interacting residue within this distance of an interacting residue (same chain)
@@ -26,10 +26,12 @@ def _format_pdb_line(atom_serial, atom_name, res_name, chain_id, res_seq, x, y, 
         f"{x:8.3f}{y:8.3f}{z:8.3f}{occupancy:6.2f}{bfactor:6.2f}           {element:2s}  \n"
     )
 
-def generate_interface(protein, chain1, chain2):
-    label = f"{protein}{chain1}{chain2}"
+def generate_interface(template: str):
+    protein = template[:4].lower()
+    chain1 = template[4]
+    chain2 = template[5]
     parser = PDBParser(QUIET=True)
-    structure = parser.get_structure(protein, f"pdbs/{protein}.pdb")
+    structure = parser.get_structure(template, f"templates/pdbs/{protein}.pdb")
 
     # Collect all atoms (and Cα) for the two chains
     # chain_data[c][res_seq] = list of (atom_name, coords, vdw)
@@ -103,8 +105,8 @@ def generate_interface(protein, chain1, chain2):
     interface_res2 = interacting2
 
     # Write Cα-only PDB files (interface residues only, one file per chain)
-    ca_path1 = os.path.join(INTERFACE_DIR, f"{label}_{chain1}_int.pdb")
-    ca_path2 = os.path.join(INTERFACE_DIR, f"{label}_{chain2}_int.pdb")
+    ca_path1 = os.path.join(INTERFACE_DIR, f"{template}_{chain1}_int.pdb")
+    ca_path2 = os.path.join(INTERFACE_DIR, f"{template}_{chain2}_int.pdb")
     serial = 1
     with open(ca_path1, "w") as f1:
         for res_seq in sorted(chain_ca[chain1].keys()):
@@ -123,7 +125,7 @@ def generate_interface(protein, chain1, chain2):
             serial += 1
 
     # Write full PDB with bFactor = 1 for interface, 0 for non-interface
-    bfactor_path = os.path.join(BFACTOR_DIR, f"{label}_bfactor.pdb")
+    bfactor_path = os.path.join(BFACTOR_DIR, f"{template}_bfactor.pdb")
     lines_out = []
     serial = 1
     for model in structure:
@@ -154,13 +156,10 @@ def generate_interface(protein, chain1, chain2):
     with open(bfactor_path, "w") as f:
         f.writelines(lines_out)
         f.write("END\n")
-    
-    interface_res1 = list(interface_res1)
-    interface_res2 = list(interface_res2)
-    with open(os.path.join(INTERFACE_LIST_DIR, f"{label}_{chain1}.json"), "w") as f:
-        json.dump(interface_res1, f, indent=4)
-    with open(os.path.join(INTERFACE_LIST_DIR, f"{label}_{chain2}.json"), "w") as f:
-        json.dump(interface_res2, f, indent=4)
+
+    interface_lists = {chain1:  list(interface_res1), chain2: list(interface_res2)}
+    with open(os.path.join(INTERFACE_LIST_DIR, f"{template}.json"), "w") as f:
+        f.write(json.dumps(interface_lists, indent=4))
 
     return {
         "ca_chain1": ca_path1,
@@ -169,6 +168,33 @@ def generate_interface(protein, chain1, chain2):
         "interface_residues_chain1": interface_res1,
         "interface_residues_chain2": interface_res2,
     }
+
+def get_contacts(protein):
+    parser = PDBParser(QUIET=True)
+    structure = parser.get_structure(protein, f"templates/pdbs/{protein[:4].lower()}.pdb")
+    chain_data = {}
+    chain_ca = {}
+    for model in structure:
+        for chain in model:
+            for residue in chain:
+                if not is_aa(residue, standard=True):
+                    continue
+                res_seq = residue.id[1]
+                res_name = residue.get_resname()
+                vdw_map = vdw_radii_extended(res_name)
+                atoms = []
+                ca_coords = None
+                for atom in residue:
+                    name = atom.get_name()
+                    coords = list(atom.get_coord())
+                    vdw = vdw_map.get(name, DEFAULT_VDW)
+                    atoms.append((name, coords, vdw))
+                    if name == "CA":
+                        ca_coords = coords
+                if atoms and ca_coords is not None:
+                    chain_data[chain.id][res_seq] = (res_name, atoms)
+                    chain_ca[chain.id][res_seq] = (res_name, ca_coords)
+    return chain_data, chain_ca
 
 if __name__ == "__main__":
     protein = "1a28"

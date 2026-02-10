@@ -1,12 +1,12 @@
 # Keys in this file are like this: GLN_682_A --> residue name, residue number, chain id
 
 import os
-import pickle
+import json
 from Bio.PDB import PDBParser
 from Bio.PDB.Polypeptide import is_aa
 
-from utils import distance_calculator, three2one, ATOM_DICT, PAIR_POTENTIAL
-from naccess_utils import get_asa_complex
+from .utils import distance_calculator, three2one, ATOM_DICT, PAIR_POTENTIAL
+from .naccess_utils import get_asa_complex
 
 RELATIVE_ASA_THRESHOLD = 20.0
 CONTACT_POTENTIAL_THRESHOLD = 18.0
@@ -30,8 +30,8 @@ def hotspot_creator(template):
         if asa_complex[item] <= RELATIVE_ASA_THRESHOLD and abs(contact_potentials[item]) >= CONTACT_POTENTIAL_THRESHOLD:
             hotspot_dict[chain].append((item.split("_")[1], item.split("_")[0])) # (residue number, residue name)
 
-    with open(f"{HOTSPOT_DIR}/{template}.pkl", "wb") as f:
-        pickle.dump(hotspot_dict, f)
+    with open(f"{HOTSPOT_DIR}/{template}.json", "w") as f:
+        f.write(json.dumps(hotspot_dict, indent=4))
 
 def get_contact_potentials(protein, chain1, chain2):
     contact_dict = contacting_residues(protein, chain1, chain2)
@@ -81,7 +81,7 @@ def center_of_mass(protein, chain1, chain2):
     return center_coordinates
 
 def fetch_all_atoms_coordinates(protein, chain1, chain2):
-    pdb_path = f"pdbs/{protein}.pdb"
+    pdb_path = f"templates/pdbs/{protein}.pdb"
     parser = PDBParser(QUIET=True)
     structure = parser.get_structure(protein, pdb_path)
     model = structure[0]
@@ -124,14 +124,14 @@ if __name__ == "__main__":
         print(k, v)
     print(len(contact_dict))
     
-    contact_potential_dict = contact_potentials(protein, template[4], template[5])
+    contact_potential_dict = get_contact_potentials(protein, template[4], template[5])
     for k, v in list(contact_potential_dict.items())[0:5]:
         print(k, v)
     print(len(contact_potential_dict))
     
     hotspot_creator(template)
-    with open(f"{HOTSPOT_DIR}/{template}.pkl", "rb") as f:
-        hotspot_dict = pickle.load(f)
+    with open(f"{HOTSPOT_DIR}/{template}.json", "r") as f:
+        hotspot_dict = json.load(f)
     for k, v in hotspot_dict.items():
         print(k, v)
     print(len(hotspot_dict))

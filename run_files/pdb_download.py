@@ -1,47 +1,33 @@
 import os
-import subprocess, glob
-import os
+import subprocess
 import gzip
 import shutil
 import urllib.request
 
-def convert_mmcif_to_pdb(mmcif_filepath, protein):
-    beem_exe = os.path.abspath("external_tools/BeEM-master/BeEM")
+TARGET_DIR = "processed/pdbs"
+os.makedirs(TARGET_DIR, exist_ok=True)
 
-    mmcif_filepath = os.path.abspath(mmcif_filepath)
-    pdb_dir = os.path.dirname(mmcif_filepath)
-
-    ret = subprocess.call([beem_exe, mmcif_filepath], cwd=pdb_dir)
-    if ret != 0:
-        raise RuntimeError("BeEM failed")
-
-    merge_script = os.path.abspath("../../run_files/merge_bundles.py")
-    output_pdb = "{}.pdb".format(protein)
-
-    ret = subprocess.call(
-        ["python", merge_script, "*-bundle*.pdb", output_pdb],
-        cwd=pdb_dir
-    )
-    if ret != 0:
-        raise RuntimeError("merge_bundles failed")
-
-    # cleanup
-    for f in glob.glob(os.path.join(pdb_dir, "*-bundle*.pdb")):
-        os.remove(f)
-
-def download_pdb_file(pdb_id):
-    pdb_dir = "pdb"
-    final_pdb = os.path.join(pdb_dir, "{}.pdb".format(pdb_id))
-    gz_file = os.path.join(pdb_dir, "pdb{}.ent.gz".format(pdb_id))
-
-    # --------------------------------------------------
-    # 1) Try PDB format
-    # --------------------------------------------------
+def convert_mmcif_to_pdb(mmcif_filepath, pdb_dir):
     try:
-        url = (
-            "https://files.pdbj.org/pub/pdb/data/structures/all/pdb/"
-            "pdb{}.ent.gz".format(pdb_id)
-        )
+        beem_exe = "external_tools/BeEM-master/BeEM"
+
+        ret = subprocess.call([beem_exe, mmcif_filepath], cwd=pdb_dir)
+        if ret != 0:
+            raise RuntimeError("BeEM failed")
+
+        merge_script = "run_files/merge_bundles.py"
+        subprocess.call(["python", merge_script, "*-bundle*.pdb", pdb_dir])
+        return True
+    except Exception as e:
+        print(f"Error converting mmCIF to PDB: {e}")
+        return False
+
+def download_pdb_file(pdb_name, pdb_dir):
+    final_pdb = f"{pdb_dir}/{pdb_name}.pdb"
+    gz_file = f"{pdb_dir}/{pdb_name}.ent.gz"
+
+    try:
+        url = f"https://files.pdbj.org/pub/pdb/data/structures/all/pdb/pdb{pdb_name[:4].lower()}.ent.gz"
         response = urllib.request.urlopen(url)
 
         with open(gz_file, "wb") as fh:
@@ -54,19 +40,13 @@ def download_pdb_file(pdb_id):
 
         return True
     except Exception as e:
-        print("PDB download failed for {}: {}".format(pdb_id, e))
-    # --------------------------------------------------
-    # 2) Fall back to mmCIF
-    # --------------------------------------------------
+        print(f"PDB download failed for {pdb_name}: {e}")
+
     try:
-        mmcif_gz = os.path.join(pdb_dir, "{}.cif.gz".format(pdb_id))
-        mmcif_file = os.path.join(pdb_dir, "{}.cif".format(pdb_id))
+        mmcif_gz = f"{pdb_dir}/{pdb_name}.cif.gz"
+        mmcif_file = f"{pdb_dir}/{pdb_name}.cif"
 
-        mmcif_url = (
-            "https://files.pdbj.org/pub/pdb/data/structures/all/mmCIF/"
-            "{}.cif.gz".format(pdb_id)
-        )
-
+        mmcif_url = f"https://files.pdbj.org/pub/pdb/data/structures/all/mmCIF/{pdb_name[:4].lower()}.cif.gz"
         response = urllib.request.urlopen(mmcif_url)
 
         with open(mmcif_gz, "wb") as fh:
@@ -77,17 +57,11 @@ def download_pdb_file(pdb_id):
 
         os.remove(mmcif_gz)
 
-        convert_mmcif_to_pdb(mmcif_file, pdb_id)
-
-        if not os.path.exists(final_pdb):
-            return None
-
-        with open(final_pdb, "rb") as fh:
-            return fh.read()
+        return convert_mmcif_to_pdb(mmcif_file, final_pdb)
 
     except Exception as e:
-        print("Error downloading {}: {}".format(pdb_id, e))
-        return None
+        print(f"Error downloading {pdb_name}: {e}")
+        return False
 
 def pdb_downloader():
     targets = []
@@ -97,16 +71,21 @@ def pdb_downloader():
         for line in filehnd:
             line = line.strip().split()
             if len(line) == 2:
-                if len(line[0]) >= 4 and len(line[1]) >= 4:
+                if len(line[0]) == 5 and len(line[1]) == 5:
                     targets.append(line[0])
                     targets.append(line[1])
-
-    # Process PDB IDs
-    sorted_targets = list(set([pdb[:4].lower() + ''.join(sorted(set(pdb[4:]))) for pdb in targets]))
-
+                else:
+                    print(f"Skipping target {line[0]} or {line[1]} because it is not a 5-letter PDB ID."
+                          f"We only accept single chain PDB IDs.")
+                    continue
+    
     # Download and process PDBs
-    for target in sorted_targets:
-        if not os.path.exists(os.path.join("pdb", target[:4] + ".pdb")):
-            download_pdb_file(target[:4])
+    for target in list(set(targets)):
+        if not os.path.exists(f"{TARGET_DIR}/{target[:4].lower()}.pdb"):
+            if not download_pdb_file(target[:4].lower(), TARGET_DIR):
+                print(f"Failed to download PDB {target}")
+                continue
+        else:
+            print(f"PDB {target} already exists")
 
-    return sorted_targets
+    return list(set(targets))

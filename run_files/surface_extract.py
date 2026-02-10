@@ -1,15 +1,14 @@
 import os
-from pathlib import Path
 from Bio.PDB import PDBParser
 from Bio.PDB.Polypeptide import is_aa
 
-from naccess_utils import get_asa_complex
-from utils import distance_calculator
+from .naccess_utils import get_asa_complex_target
+from .utils import distance_calculator
 
 RSATHRESHOLD = 15.0
 SCFFTHRESHOLD = 1.4
 
-SURFACE_EXTRACTION_DIR = "surface_extraction"
+SURFACE_EXTRACTION_DIR = "processed/surface_extraction"
 os.makedirs(SURFACE_EXTRACTION_DIR, exist_ok=True)
 
 def extract_surfaces(queries):
@@ -17,11 +16,12 @@ def extract_surfaces(queries):
         extract_surface(protein)
 
 def extract_surface(protein):
-    asa_complex = get_asa_complex(protein, SURFACE_EXTRACTION_DIR)
+    print(f"Extracting surface for {protein}...")
+    asa_complex = get_asa_complex_target(protein, SURFACE_EXTRACTION_DIR)
     rsa_residues = [key for key in asa_complex if asa_complex[key] > RSATHRESHOLD]
     if len(rsa_residues) == 0:
         return {}
-    pdb_path = f"pdbs/{protein}.pdb"
+    pdb_path = f"processed/pdbs/{protein[:4].lower()}.pdb"
     parser = PDBParser(QUIET=True)
     structure = parser.get_structure(protein, pdb_path)
 
