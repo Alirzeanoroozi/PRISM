@@ -9,9 +9,9 @@ if str(_root) not in sys.path:
 
 from run_files.interface import fiberdock_interface_extractor
 
-ROSETTA_PREPACK = "/kuacc/apps/rosetta/rosetta_bin_linux_2022.42_bundle/main/source/bin/docking_prepack_protocol.static.linuxgccrelease"
-ROSETTA_DOCK = "/kuacc/apps/rosetta/rosetta_bin_linux_2022.42_bundle/main/source/bin/docking_protocol.static.linuxgccrelease"
-ROSETTA_DB = "/kuacc/apps/rosetta/rosetta_bin_linux_2022.42_bundle/main/database/"
+ROSETTA_PREPACK = "docking_prepack_protocol.static.linuxgccrelease"
+ROSETTA_DOCK = "docking_protocol.static.linuxgccrelease"
+ROSETTA_DB = "/opt/ohpc/pub/apps/rosetta/rosetta_bin_linux_2022.42_bundle/main/database/"
 ROSETTA_INT_SCORE_THRESHOLD = -5.0
 
 os.makedirs("processed/rosetta_refinement", exist_ok=True)
@@ -26,7 +26,7 @@ def refiner(passed_pairs):
             totalscore, intscore, structure = calculate_energy(passed0, passed1)
 
             if intscore != "-":
-                file_out.write(f"{passed0}\t{passed1}\t{intscore}\n")
+                file_out.write(f"{passed0}\t{passed1}\t{intscore}\t{totalscore}\n")
 
 def calculate_energy(passed0, passed1):
     try:
@@ -40,10 +40,6 @@ def calculate_energy(passed0, passed1):
             -ex1 -ex2aro -overwrite -ignore_zero_occupancy false -detect_disulf false -out:path:score processed/rosetta_refinement/energies")
         out_name = (combined_path.split("/")[1]).split(".pdb")[0]
         out_pdb = out_name + "_0001_0001.pdb"
-
-        if not os.path.exists("processed/rosetta_refinement"):
-            os.makedirs("processed/rosetta_refinement", exist_ok=True)
-            os.system(f"chmod 775 processed/rosetta_refinement")
 
         totalscore = "-"
         interaction_score = "-"
@@ -123,5 +119,9 @@ if __name__ == "__main__":
             -s {combined_path} \
                 -partners {partner_chains} \
                     -ex1 -ex2aro \
-                -out:file:scorefile processed/rosetta_refinement/energies/{combined_path}_prepack_score.sc \
+                -out:file:scorefile processed/rosetta_refinement/energies/{combined_path.split('/')[-1].split('.')[0]}_prepack_score.sc \
                     -overwrite -ignore_zero_occupancy false -detect_disulf false")
+    
+    # prepacked_file = "2ai9_0001.pdb"
+    # os.system(f"{ROSETTA_DOCK} -database {ROSETTA_DB} -s {prepacked_file} -docking_local_refine -partners {partner_chains} \
+    # -ex1 -ex2aro -overwrite -ignore_zero_occupancy false -detect_disulf false -out:path:score processed/rosetta_refinement/energies")
