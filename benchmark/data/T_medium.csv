@@ -1,0 +1,61 @@
+Complex,Cat.,PDB ID 1,Protein 1,PDB ID 2,Protein 2,I-RMSD (Å),ΔASA(Å2),BM version introduced
+2DD8_HL:S,AA,2G75_AB,m396,2GHV_E,SARS spike,2.19,1710,5.5
+3EO1_AB:CF ,AA,3EO0_AB,GC-1008  FAB fragment,1TGJ_AB,Transforming Growth Factor-Beta 3,1.37,1630,5.0
+3G6D_LH:A ,AA,3G6A_LH,CNTO607 FAB,1IK0_A(10),Interleukin-13,1.86,1793,5.0
+3HI6_XY:B ,AA,3HI5_HL,AL-57 FAB fragment,1MJN_A,Integrin alpha-L I domain,1.65,1871,5.0
+3L5W_LH:I ,AA,3L7E_LH,C836 FAB,1IK0_A(11),Interleukin-13,0.48,1138,5.0
+3RJQ_B:A,AA,3R0M_A,A12,3TGR_A,C1086 HIV gp120,0.79,1734,5.5
+3V6Z_AB:F ,AA,3V6F_AB,FAB E6,3KXS_F,Capsid protein assembly domain,1.83,1922,5.0
+4ETQ_HL:C,AA,4EBQ_HL,LA5,4E9O_X,vaccinia D8L IMV,0.47,2278,5.5
+4M3K_B:A,AS,4M3J_A,cAb-H7S,4BLM_A,B. licheniformis beta-lactamase,1.77,1588,5.5
+4POU_B:A,AS,4POY_A,VHHmetal,6ETL_A,bovine RNase A,1.83,1313,5.5
+5CBA_AB:E,AA,5C2B_HL,3B4 scFv,4ZAI_A,CXCL13,1.49,1790,5.5
+5E5M_B:A,AS,5E03_A,H11,5E56_A,mouse CTLA-4,1.56,1341,5.5
+5HGG_T:A,AS,5HDO_A,Nb4,4FUD_A,uPA,0.84,1969,5.5
+5HYS_CD:JK,AA,2XA8_HL,omalizumab (Xolair),4GT7_AB,IgE-Fc3-4,1.0,1332,5.5
+5KOV_C:AB,AA,5I30_HL,PL-2 scFv,5KOU_AB,astrovirus 2 capsid protein spike domain,1.69,1735,5.5
+5VNW_D:A,AS,5VNV_A,Nb.b201,1E78_A,human serum albumin,1.49,967,5.5
+5WHK_HL:AB,AA,5WHJ_HL,DX-2507,5BXF_AB,FcRn-B2M,1.88,1850,5.5
+6A0Z_HL:A,AA,6A0X_AB,13D4,2FK0_A,H5N1 hemagglutinin head,1.28,1661,5.5
+6AL0_HL:A,AA,4YNY_AB,NZ-1,6AKQ_A,A. aeolicus site-2 protease homolog with PA tag insertion,1.89,1623,5.5
+6EY6_I:AB,AS,5FWO_A,nb130,6EY5_AB,P. gingivalis PorM,1.9,1807,5.5
+1CGI_E:I,EI,2CGA_B,Bovine chymotrypsinogen,1HPT_,PSTI,2.02,2053,2.0
+1IJK_A:BC,ER,1AUQ_,Von Willebrand Factor dom. A1,1FVU_AB,Botrocetin,0.68,1648,2.0
+1JIW_P:I,EI,1AKL_A,Alkaline metalloproteinase,2RN4_A(1),Proteinase inhibitor,2.07,1997,4.0
+1KKL_ABC:H,ES,1JB1_ABC,HPr kinase C-ter domain,2HPR_,HPr,2.2,1641,2.0
+1M10_A:B,ER,1AUQ_,Von willebrand factor dom. A1,1M0Z_B,Glycoprotein IB-α,2.1,2097,2.0
+1NW9_B:A,ER,1JXQ_A,Capase-9,2OPY_A,BIR3-XIAP,1.97,2112,3.0
+1R6Q_A:C,ER,1R6C_X,Clp protease subunit ClpA,2W9R_A,Clp protease adaptor protein ClpS,1.67,1651,4.0
+1ZM4_A:B,ES,1N0V_C,Elongation factor 2,1XK9_A,Diphtheria toxin A catalytic domain,2.11,1554,4.0
+2NZ8_A:B,ER,1MH1_,Rac GTPase,1NTY_A,DH/PH domain of TRIO,2.13,2599,3.0
+2Z0E_A:B,ER,2D1I_A,Cysteine protease Atg4B,1V49_A(1),Microtubule-associated proteins 1A/1B light chain 3B,2.15,2478,4.0
+4FZA_A:B ,ER,1UPL_A,MO25 alpha,3GGF_A,Serine/threonine-protein kinase MST4,2.04,1695,5.0
+4IZ7_A:B ,EI,1ERK_A,Non-phosphorylated ERK,2LS7_A(1),PEA-15 Death Effector Domain,1.56,1202,5.0
+4LW4_AB:C ,ES,4LW2_AB,Cysteine desulfurase CsdA,1NI7_A(8),Cysteine desulfuration protein CsdE,1.6,1610,5.0
+1B6C_A:B,OX,1D6O_A,FKBP binding protein,1IAS_A,TGFbeta receptor,1.96,1752,2.0
+1FC2_C:D,OX,1BDD_,Staphylococcus Protein A,1FC1_AB,Human Fc fragment,1.69,1307,2.0
+1GP2_A:BG,OG,1GIA_,Gi-α,1TBG_DH,"Gi-β, γ",1.65,2287,2.0
+1GRN_A:B    *,OG,1A4R_A,CDC42 GTPase,1RGP_,CDC42 GAP,1.22,2332,2.0
+1HE8_B:A,OG,821P_,Ras GTPase,1E8Z_A,PIP3 kinase,0.92,1305,2.0
+1I2M_A:B,OG,1QG4_A,Ran GTPase,1A12_A,RCC1,2.12,2779,2.0
+1IB1_AB:E,OX,1QJB_AB,14-3-3 protein,1KUY_A,Serotonin N-acteylase,2.09,2808,2.0
+1K5D_AB:C,OG,1RRP_AB,Ran GTPase,1YRG_B,Ran GAP,1.19,2527,2.0
+1LFD_B:A,OG,5P21_A,Ras,1LXD_A,RalGDS Ras-interacting domain,1.79,1167,4.0
+1MQ8_A:B,OX,1IAM_A,ICAM-1 domain 1-2,1MQ9_A,Integrin α-L I domain,1.76,1253,4.0
+1N2C_ABCD:EF,OX,3MIN_ABCD,Nitrogenase Mo-Fe protein,2NIP_AB,Nitrogenase Fe protein,2.13,3635,2.0
+1SYX_A:B,OX,1QGV_A,Spliceosomal U5 15 kDa protein,1L2Z_A(1),CD2 receptor binding protein 2 C-ter fragment,1.64,1293,4.0
+1WQ1_R:G    *,OG,6Q21_D,Ras GTPase,1WER_,Ras GAP,1.16,2913,2.0
+1XQS_A:C,OX,1XQR_A,HspBP1,1S3X_A,Hsp70 ATPase domain,1.77,2350,3.0
+2CFH_A:C,OX,1SZ7_A,BET3,2BJN_A,TPC6,1.55,2384,3.0
+2H7V_A:C,OG,1MH1_,Rac GTPase,2H7O_A,YpkA,1.63,1574,3.0
+2HRK_A:B,OX,2HRA_A,Glutamyl-t-RNA synthetase,2HQT_A,GU-4 nucleic binding protein,2.03,1595,3.0
+2OZA_B:A,OX,3HEC_A,MAP kinase 14,3FYK_X,MAP kinase-activated protein kinase 2,1.89,6248,4.0
+3AAA_AB:C ,OX,3AA7_AB,Actin capping protein,1MYO_A(30),Myotrophin,1.78,1686,5.0
+3AAD_A:D ,OX,1EQF_A,Double bromodomain,1TEY_A(13),Histone chaperone ASF1,2.0,1461,5.0
+3BX7_A:C ,OX,3BX8_A,Lipocalin 2,3OSK_A,CTLA-4 extracellular domain,1.63,2349,5.0
+3CPH_G:A,OG,3CPI_G,Rab GDP-dissociation inhibitor,1G16_A,Ras-related protein Sec4,2.12,1685,4.0
+3DAW_A:B ,OX,1IJJ_A,Alpha actin,2HD7_A(5),Twinfilin-1 C-terminal domain,1.49,2323,5.0
+3R9A_AC:B ,OR,1H0C_AB,Alanine-glyoxylate aminotransferase,2C0M_A,PEX5P TPR repeat domain,1.91,1926,5.0
+3S9D_B:A ,OR,1N6U_A(15),IFNAR2,1ITF_A(9),IFNa2,1.69,1841,5.0
+3SZK_DE:F ,OX,3ODQ_AB,MetHaemoglobin,2H3K_A,ISDH-N1,2.1,1263,5.0
+4JCV_ADBC:E ,OX,1VDD_ABCD,Recombinational repair protein RecR,1W3S_A,DNA repair protein RecO,1.62,1949,5.0

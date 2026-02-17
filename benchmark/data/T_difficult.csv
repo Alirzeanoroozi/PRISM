@@ -1,0 +1,36 @@
+Complex,Cat.,PDB ID 1,Protein 1,PDB ID 2,Protein 2,I-RMSD (Å),ΔASA(Å2),BM version introduced
+2FJG_HL:VW,AA,2FJF_HL,G6,4KZN_AB,VEGF,2.51,1678,5.5
+4DW2_HL:U,AA,4DVB_AB,mAb-112,4DVA_U,uPA,2.27,2038,5.5
+5C7X_HL:A,AA,5D7S_HL,MOR04357,2GMF_A,GM-CSF,2.31,2523,5.5
+1ACB_E:I,EI,2CGA_B,Chymotrypsin,1EGL_,Eglin C,2.26,1544,2.0
+1F6M_A:C,ES,1CL0_A,Thioredoxin reductse,2TIR_A,Thioredoxin 1,4.9,1821,4.0
+1FQ1_A:B,ES,1B39_A,CDK2 kinase,1FPZ_F,CDK inhibitor 3,3.41,1832,2.0
+1JK9_B:A,ES,1QUP_A,CCS metallochaperone,2JCW_A,SOD1 superoxide dismutase,2.51,2130,4.0
+1JMO_A:HL,ER,1JMJ_A,Heparin cofactor,2CN0_HL,Thrombin,3.21,3461,3.0
+1JZD_AB:C,ER,1JZO_AB,DsbC disurfide bond isomerase,1JPE_A,DsbD disulfide bond isomerase,2.71,2026,4.0
+1PXV_A:C,EI,1X9Y_A,Cystein protease,1NYC_A,Cystein protease inhibitor,2.63,2336,3.0
+1ZLI_A:B,EI,1KWM_A,Carboxypeptidase B,2JTO_A(6),Tick carboxypeptidase inhibitor,2.53,2084,4.0
+2IDO_A:B,ES,1J54_A,DNA polymerase III ε exonuclease domain,1SE7_A(1),HOT protein (P1 phage),2.79,1953,4.0
+2O3B_A:B,EI,1ZM8_A,NucA nuclease,1J57_A,NuiA nuclease inhibitor,3.13,1675,4.0
+2OT3_B:A,ER,1YZU_A,Rab21 GTPase,1TXU_A,Rabex-5 VPS9 domain,2.79,2306,3.0
+3FN1_B:A ,ER,2EDI_A(5),UQ_con domain from NEDD8-conjugating enzyme UBE2F,2LQ7_A,NEDD8-activaating enzyme E1 catalytic subunit,3.65,1897,5.0
+3H11_BC:A ,ER,4JJ7_AB,Caspase-8,3H13_A,c-FLIPL protease-like domain,3.79,3169,5.0
+4GAM_AFBGCH:D ,ER,1XVB_ABCDEF,Methane monooxygenase hydroxylase,1CKV_A(9),Methane monooxygenase regulatory protein B,5.79,6671,5.0
+1ATN_A:D,OX,1IJJ_B,Actin,3DNI_,Dnase I,3.28,1774,2.0
+1BKD_R:S,OG,1CTQ_A,Ras GTPase,2II0_A,Son of sevenless,2.86,3163,3.0
+1DE4_AB:CF,OX,1A6Z_AB,β2-microglobulin,1CX8_AB,Transferrin receptor ectodom.,2.59,2066,2.0
+1E4K_AB:C,OR,3AVE_AB,FC fragment of human IgG 1,1FNL_A,Human FCGR III,2.6,1634,3.0
+1EER_A:BC,OR,1BUY_A,Erythropoietin,1ERN_AB,EPO receptor,2.44,3347,2.0
+1FAK_HL:T,OR,1QFK_HL,Coagulation factor VIIa,1TFH_B,Soluble tissue factor,6.18,3363,2.0
+1H1V_A:G,OX,1IJJ_B,Actin,1D0N_B,Gelsolin,6.62,2071,2.0
+1IBR_A:B,OG,1QG4_A,Ran GTPase,1F59_A,Importin beta,2.54,2270,2.0
+1IRA_Y:X,OR,1G0Y_R,Interleukin-1 receptor,1ILR_1,Interleukin-1 receptor antagonist protein,8.38,3367,3.0
+1R8S_A:E,OG,1HUR_A,Arf1 GTPase,1R8M_E,Sec 7 domain,3.73,2986,3.0
+1RKE_A:B ,OX,1SYQ_A,Vinculin head,3MYI_A,Vinculin tail,4.25,2614,5.0
+1Y64_A:B,OX,2FXU_A,Actin,1UX5_A,BNI1 protein,4.69,2745,3.0
+2C0L_A:B,OX,1FCH_A,PTS1 and TRP region of PEX5,1C44_A,SCP2,2.62,2013,3.0
+2I9B_E:A,OR,1YWH_A,Urokinase plasminogen activator surface receptor,2I9A_A,Urokinase-type plasminogen activator,3.79,2371,4.0
+2J7P_A:D,OX,1NG1_A,SRP GTPase Ffh,2IYL_D,Cell division protein FtsY,2.67,3008,4.0
+3AAD_A:B ,OX,1EQF_A,Double bromodomain,1TEY_A(4),Histone chaperone ASF1,4.37,1654,5.0
+3F1P_A:B ,OX,1P97_A(9),HIF2 alpha C-terminal PAS domain,1X0O_A(5),ARNT C-terminal PAS domain,2.52,1919,5.0
+3L89_ABC:M ,OR,3L88_ABC,Ad21 fiber knob,1CKL_A,CD46 SCR1 and SCR2 domains,2.51,2167,5.0
