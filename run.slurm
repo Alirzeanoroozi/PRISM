@@ -8,7 +8,6 @@
 #SBATCH --time=72:00:00
 #SBATCH --mem=40G
 #SBATCH --output=logs/comp.out
-#SBATCH --error=logs/comp.out
 
 # Initialise environment and modules
 CONDA_BASE=$(conda info --base)
