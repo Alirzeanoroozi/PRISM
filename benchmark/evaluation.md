@@ -1,3 +1,8 @@
+# Benchmark
+downloaded from [zlab.wenglab.org/benchmark](https://zlab.wenglab.org/benchmark/) and  
+![Benchmark image](image.png)
+
+
 python irmsd.py first_structure.pdb chainA chainB second_structure.pdb
 chainA chainB
 
