@@ -52,3 +52,6 @@ def pdb_downloader():
             print(f"PDB {target} already exists")
 
     return list(set(receptor_targets)), list(set(ligand_targets))
+
+if __name__ == "__main__":
+    pdb_downloader()

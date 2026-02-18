@@ -1,13 +1,5 @@
 import os
-import sys
-from pathlib import Path
-
-# Allow running as script: python run_files/rosetta_refinement.py
-_root = Path(__file__).resolve().parent.parent
-if str(_root) not in sys.path:
-    sys.path.insert(0, str(_root))
-
-from run_files.interface import fiberdock_interface_extractor
+from .contact import get_contacts
 
 ROSETTA_PREPACK = "docking_prepack_protocol.static.linuxgccrelease"
 ROSETTA_DOCK = "docking_protocol.static.linuxgccrelease"
@@ -75,9 +67,9 @@ def calculate_energy(passed0, passed1):
 
             int_res_path = f"processed/rosetta_refinement/{out_pdb}.intRes.txt"
             try:
-                fiberdock_interface_extractor(f"processed/rosetta_refinement/{out_pdb}", int_res_path, structure_list[0], structure_list[1])
+                get_contacts(f"processed/rosetta_refinement/{out_pdb}", int_res_path, structure_list[0], structure_list[1])
             except Exception as e:
-                print(f"Exception during fiberdock_interface_extractor: {e}")
+                print(f"Exception during get_contacts: {e}")
 
             return totalscore, str(interaction_score), f"processed/rosetta_refinement/{out_pdb}"
         else:
