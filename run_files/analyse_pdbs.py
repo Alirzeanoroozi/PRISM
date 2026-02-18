@@ -6,6 +6,7 @@ from Bio.PDB import PDBParser
 from .pdb_download import download_pdb_file
 
 TEMPLATES_PDBS_DIR = "templates/pdbs"
+os.makedirs(TEMPLATES_PDBS_DIR, exist_ok=True)
 
 def analyse_pdb(filepath):
     parser = PDBParser(QUIET=True)
@@ -59,7 +60,7 @@ def analyse_pdb(filepath):
 
 def run_analysis():
     with open("templates.txt", "r") as f:
-        templates = [line.strip() for line in f.readlines()]
+        templates = [line.strip() for line in f.readlines() if len(line.strip()) > 0]
 
     results = []
     failed_templates = []

@@ -86,15 +86,17 @@ def generate_interface(template: str):
 
     # Add nearby residues: same chain, Cα within 6 Å of an interacting residue
     def add_nearby(chain_id):
+        temp_set = set()
         interact = interacting1 if chain_id == chain1 else interacting2
         ca_dict = chains_cas[chain_id]
         for res_seq, (res_name, ca_coords) in ca_dict.items():
             if res_seq in interact:
                 continue
             for other_seq in interact:
-                _, other_ca = chains_cas[other_seq]
+                _, other_ca = chains_cas[chain_id][other_seq]
                 if distance_calculator(ca_coords, other_ca) <= NEARBY_CA_CUTOFF:
-                    interact.add(res_seq)
+                    temp_set.add(res_seq)
+        interact.update(temp_set)
 
     add_nearby(chain1)
     add_nearby(chain2)

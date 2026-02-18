@@ -1,5 +1,6 @@
 import json
 import os
+import pandas as pd
 from .utils import read_ca_coordinates, distance_calculator
 
 os.makedirs("processed/transformation", exist_ok=True)
@@ -21,12 +22,7 @@ passed_pairs = []
 template_size = {}
 
 def transformer(templates):
-    pairs = []
-    with open("input_pair_list.txt", "r") as f:
-        for line in f:
-            items = line.strip().split()
-            if len(items) == 2:
-                pairs.append((items[0], items[1]))
+    df = pd.read_csv("inputs.csv")
 
     for template in templates:
         chain1 = template[4]
@@ -38,7 +34,7 @@ def transformer(templates):
         template_size[f"{template}_{chain1}"] = len(data[chain1])
         template_size[f"{template}_{chain2}"] = len(data[chain2])
 
-        for left_query, right_query in pairs:
+        for left_query, right_query in zip(df["Receptor"], df["Ligand"]):
             process_pair_for_template(template, chain1, chain2, left_query, right_query)
 
     return passed_pairs
