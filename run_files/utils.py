@@ -43,6 +43,8 @@ def three2one(res_name):
         'TYR':'Y'
     }.get(res_name, 'X')
 
+DEFAULT_VDW = 1.80
+
 def vdw_radii():
     return {'C':1.76, 'N':1.65, 'O':1.40, 'CA':1.87, 'H':1.20, 'S':1.85, 'CB':1.87, 'CZ':1.76, 'NZ':1.50, 'CD':1.81, 'CE':1.81, 'CG':1.81, 'C1':1.80, 'P':1.90}
 

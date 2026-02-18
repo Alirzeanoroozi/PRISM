@@ -3,8 +3,9 @@ import pandas as pd
 from .utils import STANDARD_AA
 from Bio.PDB import PDBParser
 
-TEMPLATES_PDBS_DIR = "templates/pdbs"
 from .pdb_download import download_pdb_file
+
+TEMPLATES_PDBS_DIR = "templates/pdbs"
 
 def analyse_pdb(filepath):
     parser = PDBParser(QUIET=True)
@@ -83,12 +84,12 @@ def run_analysis():
     filtered = df[(df["num_chains"] > 1) & (df["structure_type"] == "single")]
     filtered.to_csv("templates/templates_filtered.csv", index=False)
 
-    templates_updatex_path = "processed/templates.txt"
+    templates_updatex_path = "templates/checked_templates.txt"
     with open(templates_updatex_path, "w", encoding="utf-8") as f:
         for tpl in filtered["template"]:
             f.write(f"{tpl}\n")
 
-    missing_templates_path = "processed/missing_templates.txt"
+    missing_templates_path = "templates/missing_templates.txt"
     with open(missing_templates_path, "w", encoding="utf-8") as f:
         for tpl in failed_templates:
             f.write(f"{tpl}\n")

@@ -1,16 +1,7 @@
-#!/usr/bin/env python3
-"""Extract chains and sequences from PDB files using Biopython."""
-
-from pathlib import Path
-
+import os
 from Bio.PDB import PDBParser, PPBuilder
 
-
-def extract_sequences_from_pdb(pdb_path: str) -> dict[str, str]:
-    """Extract chain sequences from a PDB file using Biopython.
-    
-    Returns dict mapping chain_id -> sequence (1-letter codes).
-    """
+def extract_sequences_from_pdb(pdb_path):
     parser = PDBParser(QUIET=True)
     structure = parser.get_structure("structure", pdb_path)
     ppb = PPBuilder()
@@ -26,21 +17,15 @@ def extract_sequences_from_pdb(pdb_path: str) -> dict[str, str]:
     return result
 
 
-def main():
-    sample_dir = Path(__file__).resolve().parent.parent / "sample"
-    
-    if not sample_dir.exists():
-        print(f"Directory not found: {sample_dir}")
-        return
-    
-    pdb_files = sorted(sample_dir.glob("*.pdb"))
+def main():    
+    pdb_files = sorted(os.listdir("sample"))
     
     for pdb_path in pdb_files:
         print(f"\n{'='*60}")
-        print(f"File: {pdb_path.name}")
+        print(f"File: {pdb_path}")
         print("=" * 60)
         
-        chains_seqs = extract_sequences_from_pdb(str(pdb_path))
+        chains_seqs = extract_sequences_from_pdb(f"sample/{pdb_path}")
         
         if not chains_seqs:
             print("  No chains found.")

@@ -2,6 +2,7 @@ import os
 import gzip
 import shutil
 import urllib.request
+import pandas as pd
 
 TARGET_DIR = "processed/pdbs"
 os.makedirs(TARGET_DIR, exist_ok=True)
@@ -28,23 +29,21 @@ def download_pdb_file(pdb_name, pdb_dir):
         return False
 
 def pdb_downloader():
-    targets = []
+    receptor_targets = []
+    ligand_targets = []
 
     # Read pair list
-    with open("input_pair_list.txt", "r") as filehnd:
-        for line in filehnd:
-            line = line.strip().split()
-            if len(line) == 2:
-                if len(line[0]) == 5 and len(line[1]) == 5:
-                    targets.append(line[0])
-                    targets.append(line[1])
-                else:
-                    print(f"Skipping target {line[0]} or {line[1]} because it is not a 5-letter PDB ID."
-                          f"We only accept single chain PDB IDs.")
-                    continue
+    df = pd.read_csv("inputs.csv")
+    for _, row in df.iterrows():
+        if len(row["Receptor"]) == 5 and len(row["Ligand"]) == 5:
+            receptor_targets.append(row["Receptor"])
+            ligand_targets.append(row["Ligand"])
+        else:
+            print(f"Skipping target {row['Receptor']} or {row['Ligand']} because it is not a 5-letter PDB ID. We only accept single chain PDB IDs.")
+            continue
     
     # Download and process PDBs
-    for target in list(set(targets)):
+    for target in list(set(receptor_targets + ligand_targets)):
         if not os.path.exists(f"{TARGET_DIR}/{target[:4].lower()}.pdb"):
             if not download_pdb_file(target[:4].lower(), TARGET_DIR):
                 print(f"Failed to download PDB {target}")
@@ -52,4 +51,4 @@ def pdb_downloader():
         else:
             print(f"PDB {target} already exists")
 
-    return list(set(targets))
+    return list(set(receptor_targets)), list(set(ligand_targets))

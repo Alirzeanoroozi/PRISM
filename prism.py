@@ -10,8 +10,9 @@ from run_files.rosetta_refinement import refiner
 
 def main(args):
     print("PDB download stage started...")
-    targets = pdb_downloader()
-    print("targets", targets)
+    receptor_targets, ligand_targets = pdb_downloader()
+    for r, l in zip(receptor_targets, ligand_targets):
+        print(r, "->", l)
     print("PDB download stage finished...")
 
     if args.generate_templates:
@@ -27,7 +28,7 @@ def main(args):
         print("Templates generated, templates length", len(templates))
         print("Template generation stage finished...")
     else:
-        with open("processed/templates.txt", "r") as f:
+        with open("templates/calculated_templates.txt", "r") as f:
             templates = [line.strip() for line in f.readlines()]
         print("Templates loaded, templates length", len(templates))
 
