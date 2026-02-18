@@ -23,6 +23,16 @@ def _format_pdb_line(atom_serial, atom_name, res_name, chain_id, res_seq, x, y, 
         f"{x:8.3f}{y:8.3f}{z:8.3f}{occupancy:6.2f}{bfactor:6.2f}           {element:2s}  \n"
     )
 
+def write_ca_only_pdb(path, chain_id, chains_cas, interface_res):
+    serial = 1
+    with open(path, "w") as f:
+        for res_seq in sorted(chains_cas[chain_id].keys()):
+            if res_seq not in interface_res:
+                continue
+            res_name, (x, y, z) = chains_cas[chain_id][res_seq]
+            f.write(_format_pdb_line(serial, " CA ", res_name, chain_id, res_seq, x, y, z, bfactor=1.00))
+            serial += 1
+
 def generate_interface(template: str):
     protein = template[:4].lower()
     chain1 = template[4]
@@ -89,63 +99,46 @@ def generate_interface(template: str):
     add_nearby(chain1)
     add_nearby(chain2)
 
-    interface_res1 = interacting1
-    interface_res2 = interacting2
-
     # Write Cα-only PDB files (interface residues only, one file per chain)
     ca_path1 = os.path.join(INTERFACE_DIR, f"{template}_{chain1}_int.pdb")
+    write_ca_only_pdb(ca_path1, chain1, chains_cas, interacting1)
+
     ca_path2 = os.path.join(INTERFACE_DIR, f"{template}_{chain2}_int.pdb")
-    serial = 1
-    with open(ca_path1, "w") as f1:
-        for res_seq in sorted(chain_ca[chain1].keys()):
-            if res_seq not in interface_res1:
-                continue
-            res_name, (x, y, z) = chain_ca[chain1][res_seq]
-            f1.write(_format_pdb_line(serial, " CA ", res_name, chain1, res_seq, x, y, z, bfactor=1.00))
-            serial += 1
-    serial = 1
-    with open(ca_path2, "w") as f2:
-        for res_seq in sorted(chain_ca[chain2].keys()):
-            if res_seq not in interface_res2:
-                continue
-            res_name, (x, y, z) = chain_ca[chain2][res_seq]
-            f2.write(_format_pdb_line(serial, " CA ", res_name, chain2, res_seq, x, y, z, bfactor=1.00))
-            serial += 1
+    write_ca_only_pdb(ca_path2, chain2, chains_cas, interacting2)
 
     # Write full PDB with bFactor = 1 for interface, 0 for non-interface
     bfactor_path = os.path.join(BFACTOR_DIR, f"{template}_bfactor.pdb")
     lines_out = []
     serial = 1
-    for model in structure:
-        for chain in model:
-            cid = chain.id
-            interface_set = interface_res1 if cid == chain1 else (interface_res2 if cid == chain2 else set())
-            for residue in chain:
-                if not is_aa(residue, standard=True):
-                    continue
-                res_seq = residue.id[1]
-                bfactor_val = 99.0 if res_seq in interface_set else 0.0
-                for atom in residue:
-                    name = atom.get_name()
-                    coords = atom.get_coord()
-                    res_name = residue.get_resname()
-                    elem = "C" if name == "CA" else name[0]
-                    atom_name_4 = (" " + name).ljust(4)[:4]  # PDB atom name 4 chars
-                    occ = atom.get_occupancy()
-                    lines_out.append(
-                        _format_pdb_line(
-                            serial, atom_name_4, res_name, cid, res_seq,
-                            coords[0], coords[1], coords[2],
-                            occupancy=occ, bfactor=bfactor_val, element=elem
-                        )
+    for chain in model:
+        cid = chain.id
+        interface_set = interacting1 if cid == chain1 else (interacting2 if cid == chain2 else set())
+        for residue in chain:
+            if not is_aa(residue, standard=True):
+                continue
+            res_seq = residue.id[1]
+            bfactor_val = 99.0 if res_seq in interface_set else 0.0
+            for atom in residue:
+                name = atom.get_name()
+                coords = atom.get_coord()
+                res_name = residue.get_resname()
+                elem = "C" if name == "CA" else name[0]
+                atom_name_4 = (" " + name).ljust(4)[:4]  # PDB atom name 4 chars
+                occ = atom.get_occupancy()
+                lines_out.append(
+                    _format_pdb_line(
+                        serial, atom_name_4, res_name, cid, res_seq,
+                        coords[0], coords[1], coords[2],
+                        occupancy=occ, bfactor=bfactor_val, element=elem
                     )
-                    serial += 1
+                )
+                serial += 1
         break  # single model
     with open(bfactor_path, "w") as f:
         f.writelines(lines_out)
         f.write("END\n")
 
-    interface_lists = {chain1:  list(interface_res1), chain2: list(interface_res2)}
+    interface_lists = {chain1:  list(interacting1), chain2: list(interacting2)}
     with open(os.path.join(INTERFACE_LIST_DIR, f"{template}.json"), "w") as f:
         f.write(json.dumps(interface_lists, indent=4))
 
@@ -153,8 +146,8 @@ def generate_interface(template: str):
         "ca_chain1": ca_path1,
         "ca_chain2": ca_path2,
         "bfactor_pdb": bfactor_path,
-        "interface_residues_chain1": interface_res1,
-        "interface_residues_chain2": interface_res2,
+        "interface_residues_chain1": interacting1,
+        "interface_residues_chain2": interacting2,
     }
 
 if __name__ == "__main__":

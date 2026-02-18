@@ -11,6 +11,7 @@ from run_files.rosetta_refinement import refiner
 def main(args):
     print("PDB download stage started...")
     receptor_targets, ligand_targets = pdb_downloader()
+    targets = receptor_targets + ligand_targets
     for r, l in zip(receptor_targets, ligand_targets):
         print(r, "->", l)
     print("PDB download stage finished...")

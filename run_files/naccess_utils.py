@@ -24,7 +24,6 @@ def get_asa_complex(template, save_directory):
     
     return relative_asa_complex
 
-
 def get_asa_complex_target(template, save_directory):
     run_naccess(template, save_directory, is_target=True)
     chain_id = template[4]
