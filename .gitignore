@@ -4,3 +4,4 @@ templates.zip
 *.pyc
 .DS_Store
 benchmark/structures/
+processed.zip
