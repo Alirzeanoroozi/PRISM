@@ -21,7 +21,7 @@ def template_generator():
             # print(f"Contact Generation for {template} Finished!!")
             calculated_templates.append(template)
         except Exception as e:
-            print(f"Error in template generation for {template}: {e.with_traceback()}")
+            print(f"Error in template generation for {template}: {e}")
             continue
     with open("templates/calculated_templates.txt", "w") as f:
         for template in calculated_templates:
