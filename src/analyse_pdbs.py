@@ -1,9 +1,9 @@
 import os
 import pandas as pd
-from .utils import STANDARD_AA
 from Bio.PDB import PDBParser
 
 from .pdb_download import download_pdb_file
+from .utils import STANDARD_AA
 
 TEMPLATES_PDBS_DIR = "templates/pdbs"
 os.makedirs(TEMPLATES_PDBS_DIR, exist_ok=True)

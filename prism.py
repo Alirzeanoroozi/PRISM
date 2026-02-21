@@ -1,12 +1,12 @@
 import argparse
 
-from run_files.pdb_download import pdb_downloader
-from run_files.analyse_pdbs import run_analysis
-from run_files.template_generate import template_generator
-from run_files.surface_extract import extract_surfaces
-from run_files.alignment import align
-from run_files.transformation import transformer
-from run_files.rosetta_refinement import refiner
+from src.pdb_download import pdb_downloader
+from src.analyse_pdbs import run_analysis
+from src.template_generate import template_generator
+from src.surface_extract import extract_surfaces
+from src.alignment import align
+from src.transformation import transformer
+from src.rosetta_refinement import refiner
 
 def main(args):
     print("PDB download stage started...")

@@ -1,4 +1,5 @@
 import os
+
 from .contact import get_contacts
 
 ROSETTA_PREPACK = "docking_prepack_protocol.static.linuxgccrelease"

@@ -1,8 +1,9 @@
 import os
 from Bio.PDB import PDBParser
 import json
-from .utils import vdw_radii_extended, distance_calculator, DEFAULT_VDW
 from Bio.PDB.Polypeptide import is_aa
+
+from .utils import vdw_radii_extended, distance_calculator, DEFAULT_VDW
 
 # Nearby residue cutoff: Cα of non-interacting residue within this distance of an interacting residue (same chain)
 NEARBY_CA_CUTOFF = 6.0  # Å
