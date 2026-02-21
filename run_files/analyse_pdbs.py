@@ -59,7 +59,7 @@ def analyse_pdb(filepath):
     }
 
 def run_analysis():
-    with open("templates.txt", "r") as f:
+    with open("templates/templates.txt", "r") as f:
         templates = [line.strip() for line in f.readlines() if len(line.strip()) > 0]
 
     results = []

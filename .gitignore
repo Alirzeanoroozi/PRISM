@@ -1,9 +1,11 @@
-templates/
-pdb.zip
-templates.zip
 *.pyc
 .DS_Store
-benchmark/structures/
-processed.zip
 logs/
+
+templates/
 processed/
+
+benchmark/data/structures/
+benchmark/data/pdbs/
+benchmark/prism_runs/
+
