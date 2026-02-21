@@ -18,3 +18,5 @@ export LD_LIBRARY_PATH=${CONDA_BASE}/lib
 module load rosetta/2022.42
 # python prism.py --generate_templates True
 python prism.py
+
+# test git
