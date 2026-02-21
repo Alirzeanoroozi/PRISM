@@ -1,5 +1,5 @@
 #!/bin/csh 
-set EXE_PATH = /Users/alirezanoroozi/Documents/GitHub/PRISM/external_tools/naccess
+set EXE_PATH = /scratch/anoroozi25/PRISM/external_tools/naccess
 #naccess_start
 #
 # The preceding line should be editted to point to

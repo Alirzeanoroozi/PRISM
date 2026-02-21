@@ -5,3 +5,5 @@ templates.zip
 .DS_Store
 benchmark/structures/
 processed.zip
+logs/
+processed/
