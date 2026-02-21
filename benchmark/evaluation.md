@@ -1,6 +1,6 @@
 # Benchmark
 downloaded from [zlab.wenglab.org/benchmark](https://zlab.wenglab.org/benchmark/) and  
-![Benchmark image](figures/image.png)
+![Benchmark image](originals/image.png)
 
 BENCHMARK VERSION 5.0
 

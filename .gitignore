@@ -5,7 +5,4 @@ logs/
 templates/
 processed/
 
-benchmark/data/structures/
-benchmark/data/pdbs/
-benchmark/prism_runs/
-
+benchmark/data/
