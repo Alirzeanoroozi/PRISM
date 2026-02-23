@@ -1,0 +1,34 @@
+
+1) count_pairs.py
+- Purpose: Counts how many unique pairs from merged.txt have any results in rosetta_output_1.
+- Logic: Reads merged.txt, normalizes pairs (order-independent), scans rosetta output filenames,
+  and reports matched vs missing counts.
+- Use when: You only need the overall hit/miss counts.
+
+2) count_pairs_detailed.py
+- Purpose: Produces a detailed job-wise breakdown and a full text report.
+- Logic: Tracks which joblist folders contain each matched pair, then summarizes top/bottom jobs.
+- Output: pair_analysis_report.txt with top/bottom jobs, full job list, and missing pairs list.
+- Use when: You want a full text report with job-wise details and missing pairs.
+
+3) generate_csv_reports.py
+- Purpose: Converts the analysis into CSV files for spreadsheet use.
+- Output CSVs:
+  - overall_summary.csv: high-level totals and percentages.
+  - job_wise_summary.csv: pairs found per joblist + percent of total.
+  - pairs_with_results.csv: each matched pair and the joblist(s) where it appears.
+  - pairs_without_results.csv: list of pairs with no results found.
+- Use when: You want the data in CSV format for filtering/plots.
+
+Results (insight):
+
+- overall_summary.csv: Shows total coverage. Current run: 231/451 pairs (51.2%) have results.
+- job_wise_summary.csv: Highlights strongest/weakest joblists by pairs found. Useful to spot
+  joblists that produced fewer outputs than expected.
+- pairs_with_results.csv: Confirms which pairs produced results and where they were found.
+- pairs_without_results.csv: Primary list of missing pairs to investigate or re-run.
+
+Notes:
+- Pair normalization is order-independent, so swapped names (e.g., A_B vs B_A) are treated
+  as the same pair.
+- Counts are based on filename patterns: *_PDB1_0_PDB2_0.rosetta_* .

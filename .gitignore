@@ -1,8 +1,9 @@
 *.pyc
 .DS_Store
 logs/
-
 templates/
 processed/
-
 benchmark/data/
+benchmark/prism_processed/
+benchmark/joblist_001-045_20260223.tar.gz
+benchmark/scripts/pre_scripts
