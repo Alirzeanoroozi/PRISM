@@ -14,8 +14,8 @@ os.makedirs(INTERFACE_DIR, exist_ok=True)
 INTERFACE_LIST_DIR = "templates/interfaces_lists"
 os.makedirs(INTERFACE_LIST_DIR, exist_ok=True)
 
-BFACTOR_DIR = "templates/bfactor_pdbs"
-os.makedirs(BFACTOR_DIR, exist_ok=True)
+# BFACTOR_DIR = "templates/bfactor_pdbs"
+# os.makedirs(BFACTOR_DIR, exist_ok=True)
 
 def _format_pdb_line(atom_serial, atom_name, res_name, chain_id, res_seq, x, y, z, occupancy=1.00, bfactor=0.00, element="C"):
     """Format a single ATOM line. atom_name should be 4 chars (e.g. ' CA ')."""
@@ -109,53 +109,45 @@ def generate_interface(template: str):
     ca_path2 = os.path.join(INTERFACE_DIR, f"{template}_{chain2}_int.pdb")
     write_ca_only_pdb(ca_path2, chain2, chains_cas, interacting2)
 
-    # Write full PDB with bFactor = 1 for interface, 0 for non-interface
-    bfactor_path = os.path.join(BFACTOR_DIR, f"{template}_bfactor.pdb")
-    lines_out = []
-    serial = 1
-    for chain in model:
-        cid = chain.id
-        interface_set = interacting1 if cid == chain1 else (interacting2 if cid == chain2 else set())
-        for residue in chain:
-            if not is_aa(residue, standard=True):
-                continue
-            res_seq = residue.id[1]
-            bfactor_val = 99.0 if res_seq in interface_set else 0.0
-            for atom in residue:
-                name = atom.get_name()
-                coords = atom.get_coord()
-                res_name = residue.get_resname()
-                elem = "C" if name == "CA" else name[0]
-                atom_name_4 = (" " + name).ljust(4)[:4]  # PDB atom name 4 chars
-                occ = atom.get_occupancy()
-                lines_out.append(
-                    _format_pdb_line(
-                        serial, atom_name_4, res_name, cid, res_seq,
-                        coords[0], coords[1], coords[2],
-                        occupancy=occ, bfactor=bfactor_val, element=elem
-                    )
-                )
-                serial += 1
-        break  # single model
-    with open(bfactor_path, "w") as f:
-        f.writelines(lines_out)
-        f.write("END\n")
+    # # Write full PDB with bFactor = 1 for interface, 0 for non-interface
+    # bfactor_path = os.path.join(BFACTOR_DIR, f"{template}_bfactor.pdb")
+    # lines_out = []
+    # serial = 1
+    # for chain in model:
+    #     cid = chain.id
+    #     interface_set = interacting1 if cid == chain1 else (interacting2 if cid == chain2 else set())
+    #     for residue in chain:
+    #         if not is_aa(residue, standard=True):
+    #             continue
+    #         res_seq = residue.id[1]
+    #         bfactor_val = 99.0 if res_seq in interface_set else 0.0
+    #         for atom in residue:
+    #             name = atom.get_name()
+    #             coords = atom.get_coord()
+    #             res_name = residue.get_resname()
+    #             elem = "C" if name == "CA" else name[0]
+    #             atom_name_4 = (" " + name).ljust(4)[:4]  # PDB atom name 4 chars
+    #             occ = atom.get_occupancy()
+    #             lines_out.append(
+    #                 _format_pdb_line(
+    #                     serial, atom_name_4, res_name, cid, res_seq,
+    #                     coords[0], coords[1], coords[2],
+    #                     occupancy=occ, bfactor=bfactor_val, element=elem
+    #                 )
+    #             )
+    #             serial += 1
+    #     break  # single model
+    # with open(bfactor_path, "w") as f:
+    #     f.writelines(lines_out)
+    #     f.write("END\n")
 
     interface_lists = {chain1:  list(interacting1), chain2: list(interacting2)}
     with open(os.path.join(INTERFACE_LIST_DIR, f"{template}.json"), "w") as f:
         f.write(json.dumps(interface_lists, indent=4))
 
-    return {
-        "ca_chain1": ca_path1,
-        "ca_chain2": ca_path2,
-        "bfactor_pdb": bfactor_path,
-        "interface_residues_chain1": interacting1,
-        "interface_residues_chain2": interacting2,
-    }
 
 if __name__ == "__main__":
     protein = "1a28"
     chain1 = "A"
     chain2 = "B"
-    result = generate_interface(protein, chain1, chain2)
-    print(result)
+    generate_interface(f"{protein}_{chain1}{chain2}")
