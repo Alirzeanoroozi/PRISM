@@ -7,3 +7,5 @@ benchmark/data/
 benchmark/prism_processed/
 benchmark/joblist_001-045_20260223.tar.gz
 benchmark/scripts/pre_scripts
+template_old/
+template.zip

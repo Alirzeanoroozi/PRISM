@@ -21,9 +21,12 @@ CONTACT_COUNT_THRESHOLD = 5
 
 passed_pairs = []
 template_size = {}
+# Local change: allow test runs to override the pair list without editing inputs.csv.
+INPUTS_CSV = os.environ.get("PRISM_INPUTS_CSV", "inputs.csv")
 
-def transformer(templates):
-    df = pd.read_csv("inputs.csv")
+def transformer(templates, alignment_dir="processed/alignment"):
+    # Local change: read from env-configurable CSV path.
+    df = pd.read_csv(INPUTS_CSV)
 
     for template in templates:
         chain1 = template[4]
@@ -36,12 +39,12 @@ def transformer(templates):
         template_size[f"{template}_{chain2}"] = len(data[chain2])
 
         for left_query, right_query in zip(df["Receptor"], df["Ligand"]):
-            process_pair_for_template(template, chain1, chain2, left_query, right_query)
+            process_pair_for_template(template, chain1, chain2, left_query, right_query, alignment_dir=alignment_dir)
 
     return passed_pairs
 
-def load_alignment(query_id, template, chain_id):
-    path = os.path.join("processed/alignment", f"{query_id}_{template}_{chain_id}.json")
+def load_alignment(query_id, template, chain_id, alignment_dir="processed/alignment"):
+    path = os.path.join(alignment_dir, f"{query_id}_{template}_{chain_id}.json")
     with open(path, "r") as f:
         return json.load(f)
 
@@ -74,33 +77,35 @@ def alignment_passes_thresholds(template_key, alignment):
     else:
         return match_score > MINIMUM_RESIDUE_MATCH_PERCENTAGE
 
-def process_pair_for_template(template, chain1, chain2, left_query, right_query):
+def process_pair_for_template(template, chain1, chain2, left_query, right_query, alignment_dir="processed/alignment"):
     left_key_chain1 = f"{template}_{chain1}"
     left_key_chain2 = f"{template}_{chain2}"
 
-    left_align_1 = load_alignment(left_query, template, chain1)
-    right_align_1 = load_alignment(right_query, template, chain2)
+    left_align_1 = load_alignment(left_query, template, chain1, alignment_dir=alignment_dir)
+    right_align_1 = load_alignment(right_query, template, chain2, alignment_dir=alignment_dir)
 
     if alignment_passes_thresholds(left_key_chain1, left_align_1) and alignment_passes_thresholds(left_key_chain2, right_align_1):
         create_transformed_pair(template, left_query, right_query, left_align_1, right_align_1, passed_pairs, "o1")
 
-    left_align_2 = load_alignment(left_query, template, chain2)
-    right_align_2 = load_alignment(right_query, template, chain1)
+    left_align_2 = load_alignment(left_query, template, chain2, alignment_dir=alignment_dir)
+    right_align_2 = load_alignment(right_query, template, chain1, alignment_dir=alignment_dir)
 
     if alignment_passes_thresholds(left_key_chain2, left_align_2) and alignment_passes_thresholds(left_key_chain1, right_align_2):
         create_transformed_pair(template, left_query, right_query, left_align_2, right_align_2, passed_pairs, "o2")
 
 def create_transformed_pair(template, left_query, right_query, left_alignment, right_alignment, passed_pairs, orientation_suffix):
-    left_input = f"processed/pdbs/{left_query}.pdb"
-    right_input = f"processed/pdbs/{right_query}.pdb"
+    # Local change: input IDs include chain suffix (e.g., 1abcA), but PDB files are stored by 4-char PDB ID.
+    left_input = f"processed/pdbs/{left_query[:4].lower()}.pdb"
+    right_input = f"processed/pdbs/{right_query[:4].lower()}.pdb"
 
     left_output = f"processed/transformation/{template}_{left_query}_{right_query}_{orientation_suffix}_L.pdb"
     right_output = f"processed/transformation/{template}_{left_query}_{right_query}_{orientation_suffix}_R.pdb"
 
-    apply_tm_transform(left_input, left_output, left_alignment.get("translation", [0.0, 0.0, 0.0]), left_alignment.get("rotation_mat", [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]))
-    apply_tm_transform(right_input, right_output, right_alignment.get("translation", [0.0, 0.0, 0.0]), right_alignment.get("rotation_mat", [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]))
+    # Local change: check transform success before downstream clash filtering.
+    left_ok = apply_tm_transform(left_input, left_output, left_alignment.get("translation", [0.0, 0.0, 0.0]), left_alignment.get("rotation_mat", [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]))
+    right_ok = apply_tm_transform(right_input, right_output, right_alignment.get("translation", [0.0, 0.0, 0.0]), right_alignment.get("rotation_mat", [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]))
 
-    if pair_has_acceptable_clashes(left_output, right_output):
+    if left_ok and right_ok and os.path.exists(left_output) and os.path.exists(right_output) and pair_has_acceptable_clashes(left_output, right_output):
         passed_pairs.append((left_output, right_output))
 
 def apply_tm_transform(input_pdb, output_pdb, translation, rotation_mat):
@@ -141,8 +146,12 @@ def apply_tm_transform(input_pdb, output_pdb, translation, rotation_mat):
                         f"{line[54:]}"
                     )
                 out_f.write(line)
+        # Local change: return success/failure so caller can skip invalid outputs.
+        return True
     except Exception as exc:
         print(f"Error applying TM transform to {input_pdb}: {exc}")
+        # Local change: signal transform failure to caller.
+        return False
 
 def pair_has_acceptable_clashes(left_path, right_path):
     left_coords = read_ca_coordinates(left_path)

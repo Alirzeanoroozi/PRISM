@@ -5,6 +5,8 @@ import urllib.request
 import pandas as pd
 
 TARGET_DIR = "processed/pdbs"
+# Local change: allow test runs to override the pair list without editing inputs.csv.
+INPUTS_CSV = os.environ.get("PRISM_INPUTS_CSV", "inputs.csv")
 os.makedirs(TARGET_DIR, exist_ok=True)
 
 def download_pdb_file(pdb_name, pdb_dir):
@@ -33,7 +35,8 @@ def pdb_downloader():
     ligand_targets = []
 
     # Read pair list
-    df = pd.read_csv("inputs.csv")
+    # Local change: read from env-configurable CSV path.
+    df = pd.read_csv(INPUTS_CSV)
     for _, row in df.iterrows():
         if len(row["Receptor"]) == 5 and len(row["Ligand"]) == 5:
             receptor_targets.append(row["Receptor"])

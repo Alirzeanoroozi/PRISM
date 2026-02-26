@@ -18,3 +18,29 @@ cd ../..
 module load rosetta/2022.42
 python prism.py --generate_templates True
 ```
+
+# GTalign (Optional)
+PRISM can also run the alignment stage with GTalign (instead of TMalign) using the `--aligner gtalign` option.
+
+## Install GTalign (recommended: Conda, from official GTalign repo instructions)
+CPU (multiprocessing) version:
+```bash
+conda install minmarg::gtalign_mp
+```
+
+GPU version:
+```bash
+conda install minmarg::gtalign_gpu
+```
+
+## Example PRISM run with GTalign
+```bash
+python prism.py \
+  --aligner gtalign \
+  --gtalign_path /path/to/gtalign \
+  --generate_templates True
+```
+
+Notes:
+- The default PRISM behavior remains `TMalign` (`--aligner tmalign`).
+- When `--aligner gtalign` is used, alignment JSON files are written to `processed/alignment_gtalign/` so they are distinguishable from TMalign outputs.
