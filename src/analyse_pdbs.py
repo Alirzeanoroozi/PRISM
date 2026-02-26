@@ -64,13 +64,13 @@ def run_analysis():
 
     results = []
     failed_templates = []
-    for template in templates:
+    for idx, template in enumerate(templates):
         try:
             if not os.path.exists(f"{TEMPLATES_PDBS_DIR}/{template[:4].lower()}.pdb"):
                 print(f"Template {template} does not exist, start downloading...")
                 download_pdb_file(template[:4].lower(), TEMPLATES_PDBS_DIR)
                 if not os.path.exists(f"{TEMPLATES_PDBS_DIR}/{template[:4].lower()}.pdb"):
-                    print(f"Failed to download template {template}, skipping...")
+                    print(f"{idx+1}/{len(templates)}: Failed to download template {template}, skipping...")
                     failed_templates.append(template)
                     continue
             info = analyse_pdb(f"{TEMPLATES_PDBS_DIR}/{template[:4].lower()}.pdb")

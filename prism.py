@@ -12,6 +12,7 @@ def main(args):
     print("PDB download stage started...")
     receptor_targets, ligand_targets = pdb_downloader()
     targets = receptor_targets + ligand_targets
+    targets = list(set(targets))
     for r, l in zip(receptor_targets, ligand_targets):
         print(r, "->", l)
     print("PDB download stage finished...")
@@ -42,7 +43,7 @@ def main(args):
     print("Structural alignment stage finished...")
 
     print("Transformation filtering stage started...")
-    passed_pairs = transformer(templates)
+    passed_pairs = transformer(receptor_targets, ligand_targets, templates)
     print("Passed pairs", len(passed_pairs))
     for pair in passed_pairs:
         print(pair)
