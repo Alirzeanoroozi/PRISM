@@ -24,6 +24,9 @@ def refiner(passed_pairs):
 def calculate_energy(passed0, passed1):
     try:
         combined_path = combine_pdb(passed0, passed1)
+        # Local change: guard against combine_pdb failures before launching Rosetta.
+        if not combined_path:
+            return "-", "-", "-"
         partner_chains = f"{passed0[4]}_{passed1[4]}"
         os.system(f"{ROSETTA_PREPACK} -database {ROSETTA_DB} -s {combined_path} -partners {partner_chains} -ex1 -ex2aro \
                   -out:file:scorefile processed/rosetta_refinement/energies/{combined_path}_prepack_score.sc -overwrite -ignore_zero_occupancy false -detect_disulf false")
