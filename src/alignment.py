@@ -1,29 +1,92 @@
 import os
+import subprocess
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from Bio.PDB import PDBParser
 import json
+import csv
+from tqdm import tqdm
 
 os.makedirs("processed/alignment", exist_ok=True)
 
-def align(queries, templates):
-    for protein in queries:
+def _run_single_alignment(protein, template, chain):
+    protein_path = f"processed/surface_extraction/{protein}.asa.pdb"
+    interface_path = f"templates/interfaces/{template}_{chain}_int.pdb"
+    matrix_path = f"processed/alignment/{protein}_{template}_{chain}_matrix.out"
+    tm_path = f"processed/alignment/{protein}_{template}_{chain}_out.tm"
+    try:
+        with open(tm_path, "w") as f:
+            subprocess.run(
+                ["external_tools/TMalign", protein_path, interface_path, "-m", matrix_path],
+                stdout=f,
+                stderr=subprocess.DEVNULL,
+                check=True,
+            )
+        result = parse_tmalign(protein_path, interface_path, protein, template, chain)
+        return {
+            "protein": protein,
+            "template": template,
+            "chain": chain,
+            "match_count": result["match_count"],
+            "tm_score": result["tm_score"],
+            "translation": json.dumps(result["translation"]),
+            "rotation_mat": json.dumps(result["rotation_mat"]),
+            "match_dict": json.dumps(result["match_dict"]),
+        }
+    except Exception as e:
+        print(f"TM-align did not run for {protein} and {template}_{chain}: {e}")
+        return None
+    finally:
+        for p in (matrix_path, tm_path):
+            if os.path.exists(p):
+                try:
+                    os.remove(p)
+                except OSError:
+                    pass
+
+def align(targets, templates):
+    tasks = []
+    for target in targets:
         for template in templates:
             for chain in template[4:]:
-                protein_path = f"processed/surface_extraction/{protein}.asa.pdb"
                 interface_path = f"templates/interfaces/{template}_{chain}_int.pdb"
                 try:
-                    os.system(f"external_tools/TMalign {protein_path} {interface_path} -m processed/alignment/matrix.out > processed/alignment/out.tm")
-                except:
-                    print(f"TM-align did not run for {protein} and {template}_{chain}.")
-                parse_tmalign(protein_path, interface_path, protein, template, chain)
+                    with open(interface_path, "r") as f:
+                        if len(f.readlines()) <= 2:
+                            print(f"Interface file {interface_path} is empty.")
+                            continue
+                except FileNotFoundError:
+                    continue
+                tasks.append((target, template, chain))
 
-    if os.path.exists("processed/alignment/matrix.out"):
-        os.remove("processed/alignment/matrix.out")
-    
-    if os.path.exists("processed/alignment/out.tm"):
-        os.remove("processed/alignment/out.tm")
+    if not tasks:
+        print("No alignment tasks to run.")
+        return
+
+    workers = min(32, (os.cpu_count() or 4))
+    rows = []
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = {executor.submit(_run_single_alignment, p, t, c): (p, t, c) for p, t, c in tasks}
+        for future in tqdm(as_completed(futures), total=len(futures), desc="Aligning"):
+            row = future.result()
+            if row is not None:
+                rows.append(row)
+
+    if rows:
+        fieldnames = ["protein", "template", "chain", "match_count", "tm_score", "translation", "rotation_mat", "match_dict"]
+        rows_by_target = {}
+        for row in rows:
+            target = row["protein"]
+            rows_by_target.setdefault(target, []).append(row)
+        for target, target_rows in rows_by_target.items():
+            output_csv = f"processed/alignment/{target}.csv"
+            with open(output_csv, "w", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(target_rows)
+            print(f"Wrote {len(target_rows)} alignments to {output_csv}")
 
 def parse_tmalign(protein_path, interface_path, protein, template, chain):
-    with open("processed/alignment/matrix.out", "r") as matrix_file:
+    with open(f"processed/alignment/{protein}_{template}_{chain}_matrix.out", "r") as matrix_file:
         translation = [0.0, 0.0, 0.0]
         rotation_mat = [[0.0, 0.0, 0.0] for _ in range(3)]
 
@@ -46,7 +109,7 @@ def parse_tmalign(protein_path, interface_path, protein, template, chain):
                 rotation_mat[row_index][1] = float(tokens[3])
                 rotation_mat[row_index][2] = float(tokens[4])
 
-    with open("processed/alignment/out.tm", "r") as tm_file:
+    with open(f"processed/alignment/{protein}_{template}_{chain}_out.tm", "r") as tm_file:
         match_dict = {}
         tm_score_1 = 0.0
         tm_score_2 = 0.0
@@ -85,15 +148,13 @@ def parse_tmalign(protein_path, interface_path, protein, template, chain):
             if seq2[i] != "-":
                 index2 += 1
 
-    multi_dict = {
+    return {
         "match_count": match_count,
         "translation": translation,
         "rotation_mat": rotation_mat,
         "match_dict": match_dict,
-        "tm_score": max(tm_score_1, tm_score_2)
+        "tm_score": max(tm_score_1, tm_score_2),
     }
-    with open(f"processed/alignment/{protein}_{template}_{chain}.json", "w") as f:
-        json.dump(multi_dict, f)
 
 def extract_chain_and_res_ids(name, path):
     parser = PDBParser(QUIET=True)
@@ -107,14 +168,3 @@ def extract_chain_and_res_ids(name, path):
                     residue_ids.append(str(residue.id[1]))
                     chain_id.append(chain.id)
     return residue_ids, chain_id
-
-if __name__ == "__main__":
-    protein = "1a28"
-    template = "1a28AB"
-    chains = ["A", "B"]
-    align([protein], [template])
-    for chain in chains:
-        data = json.load(open(f"processed/alignment/{protein}_{template}_{chain}.json", "r"))
-        print(f"--- {protein}_{template}_{chain} ---")
-        print(data)
-        print()

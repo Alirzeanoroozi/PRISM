@@ -14,7 +14,9 @@ CONDA_BASE=$(conda info --base)
 source ${CONDA_BASE}/bin/activate bg
 export LD_LIBRARY_PATH=${CONDA_BASE}/lib
 
+# zip -r templates.zip templates/
+
 # module load rosetta/2022.42
 echo "Running PRISM"
-python prism.py --generate_templates True
-# python prism.py
+# python -u prism.py --generate_templates True
+python prism.py
