@@ -27,7 +27,9 @@ def transformer(receptor_targets, ligand_targets, templates):
     passed_pairs = []
     for template in tqdm(templates):
         for receptor, ligand in zip(receptor_targets, ligand_targets):
-            passed_pairs.append(process_pair_for_template(template, receptor, ligand))
+            pairs = process_pair_for_template(template, receptor, ligand)
+            if pairs is not []:
+                passed_pairs.extend(pairs)
     return passed_pairs
 
 def load_alignment(protein, template, chain_id):
@@ -46,30 +48,7 @@ def load_alignment(protein, template, chain_id):
         "tm_score": float(row["tm_score"]),
         "translation": json.loads(row["translation"]),
         "rotation_mat": json.loads(row["rotation_mat"]),
-        "match_dict": json.loads(row["match_dict"]),
     }
-
-def hotspot_analysis(match_dict):
-    return True
-
-def alignment_passes_thresholds(template, chain, alignment):
-    match_count = alignment['match_count']
-    tm_score = alignment['tm_score']
-    match_dict = alignment['match_dict']
-    
-    with open(os.path.join("templates", "interfaces_lists", f"{template}.json"), "r") as f:
-        data = json.load(f)
-
-    protein_size = len(data[chain])
-    if protein_size <= 0 or match_count < MINIMUM_RESIDUE_MATCH_COUNT or tm_score < TM_SCORE_THRESHOLD or not hotspot_analysis(match_dict):
-       return False
-
-    match_score = (match_count / protein_size) * 100.0
-
-    if protein_size > TEMPLATE_RESIDUE_COUNT:
-        return match_score > (MINIMUM_RESIDUE_MATCH_PERCENTAGE - DIFF_PERCENTAGE)
-    else:
-        return match_score > MINIMUM_RESIDUE_MATCH_PERCENTAGE
 
 def process_pair_for_template(template, receptor, ligand):
     passed_pairs = []
@@ -78,15 +57,11 @@ def process_pair_for_template(template, receptor, ligand):
 
     receptor_align_1 = load_alignment(receptor, template, chain1)
     ligand_align_2 = load_alignment(ligand, template, chain2)
-    if receptor_align_1 is not None and ligand_align_2 is not None:
-        if alignment_passes_thresholds(template, chain1, receptor_align_1) and alignment_passes_thresholds(template, chain2, ligand_align_2):
-            passed_pairs.append(create_transformed_pair(template, receptor, ligand, receptor_align_1, ligand_align_2, "o1"))
+    passed_pairs.append(create_transformed_pair(template, receptor, ligand, receptor_align_1, ligand_align_2, "o1"))
 
     receptor_align_2 = load_alignment(receptor, template, chain2)
     ligand_align_1 = load_alignment(ligand, template, chain1)
-    if receptor_align_2 is not None and ligand_align_1 is not None:
-        if alignment_passes_thresholds(template, chain2, receptor_align_2) and alignment_passes_thresholds(template, chain1, ligand_align_1):
-            passed_pairs.append(create_transformed_pair(template, receptor, ligand, receptor_align_2, ligand_align_2, "o2"))
+    passed_pairs.append(create_transformed_pair(template, receptor, ligand, receptor_align_2, ligand_align_1, "o2"))
     return passed_pairs
 
 def create_transformed_pair(template, receptor, ligand, receptor_alignment, ligand_alignment, orientation_suffix):
