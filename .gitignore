@@ -1,8 +1,7 @@
-.pyc
+*.pyc
 .DS_Store
 .vscode/
 logs/
-
 templates/
 new_template/templates.zip
 templates_test/
@@ -19,7 +18,6 @@ new_template/
 benchmark/originals/benchmark5.5
 benchmark/scripts/benchmark/
 benchmark/scripts/__pycache__/
-# Generated benchmark/test outputs (keep committed benchmark reports/results outside these test runs)
 benchmark/prism_processed_results/testcase_*/
 benchmark/prism_processed_results/gtalign_vs_tmalign_*/
 # Local runtime artifacts
