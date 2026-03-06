@@ -2,12 +2,12 @@
 .DS_Store
 .vscode/
 logs/
-
 templates/
 new_template/templates.zip
 templates_test/
 processed/
 benchmark/data/
+reference/
 benchmark/prism_processed_files/
 benchmark/joblist_001-045_20260223.tar.gz
 benchmark/scripts/pre_scripts
@@ -20,8 +20,22 @@ benchmark/originals/benchmark5.5
 benchmark/scripts/benchmark/
 benchmark/scripts/__pycache__/
 # Generated benchmark/test outputs (keep committed benchmark reports/results outside these test runs)
-benchmark/prism_processed_results/testcase_*/
-benchmark/prism_processed_results/gtalign_vs_tmalign_*/
+benchmark/prism_processed_results/
+benchmark/prism_processed_files/
+# Auxiliary benchmark scripts not needed for the main reproducible analysis pipeline
+benchmark/scripts/pre_scripts/
+benchmark/scripts/bench_alignment_backends.py
+benchmark/scripts/gtalign_prism_alignment_test.py
+benchmark/scripts/irmsd_backbone_py3.py
+benchmark/scripts/prism_count_pairs.py
+benchmark/scripts/prism_count_pairs_detailed.py
+benchmark/scripts/prism_generate_csv_reports.py
+benchmark/scripts/test_iptm.py
+benchmark/scripts/testcase_tmalign_vs_gtalign_new_template.py
+benchmark/prism_processed/env/prism_score_env
+benchmark/prism_processed/results/native_bound_complexes_t_difficult
+benchmark/prism_processed/results/native_bound_complexes_t_medium
+benchmark/prism_processed/results/native_bound_complexes_t_rigid
 # Local runtime artifacts
 __pycache__/
 src/__pycache__/
