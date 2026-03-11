@@ -8,7 +8,6 @@ from pathlib import Path
 
 from Bio.PDB import PDBParser
 
-
 def align_gtalign(
     queries,
     templates,

@@ -1,6 +1,11 @@
 import os
+import subprocess
+from threading import Lock
 
 from .utils import standard_data
+
+# Local change: serialize NACCESS because it writes fixed filenames in cwd.
+_NACCESS_LOCK = Lock()
 
 def get_asa_complex(template, save_directory):
     run_naccess(template, save_directory)
@@ -52,8 +57,38 @@ def run_naccess(template, save_directory, is_target=False):
         pdb_path = f"processed/pdbs/{template[:4].lower()}.pdb"
     else:
         pdb_path = f"templates/pdbs/{template[:4].lower()}.pdb"
-    os.system(f"external_tools/naccess/naccess {pdb_path} > .out 2>&1")
-    os.rename(f"{template[:4].lower()}.rsa", f"{save_directory}/{template}.rsa")
-    os.remove(f"{template[:4].lower()}.asa")
-    os.remove(f"{template[:4].lower()}.log")
-    os.remove(".out")
+    # Local change: ensure target directory exists before moving NACCESS outputs.
+    os.makedirs(save_directory, exist_ok=True)
+
+    pdb_id = template[:4].lower()
+    rsa_src = f"{pdb_id}.rsa"
+    asa_src = f"{pdb_id}.asa"
+    log_src = f"{pdb_id}.log"
+    out_path = f".naccess_{template}.out"
+
+    # Local change: use subprocess + lock for safer error handling and threading.
+    # NACCESS uses fixed filenames in the cwd (e.g. accall.input), so concurrent
+    # runs from template threads can clobber each other unless serialized.
+    with _NACCESS_LOCK:
+        with open(out_path, "w") as out_file:
+            result = subprocess.run(
+                ["external_tools/naccess/naccess", pdb_path],
+                stdout=out_file,
+                stderr=subprocess.STDOUT,
+                check=False,
+            )
+
+        if result.returncode != 0 or not os.path.exists(rsa_src):
+            output = ""
+            if os.path.exists(out_path):
+                with open(out_path, "r") as f:
+                    output = f.read().strip()
+            raise RuntimeError(
+                f"NACCESS failed for {template} (pdb: {pdb_path}, exit code: {result.returncode}). "
+                f"{output or 'No output captured.'}"
+            )
+
+        os.rename(rsa_src, f"{save_directory}/{template}.rsa")
+        for tmp in (asa_src, log_src, out_path):
+            if os.path.exists(tmp):
+                os.remove(tmp)

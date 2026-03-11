@@ -10,9 +10,8 @@ from src.transformation import transformer
 from src.rosetta_refinement import refiner
 
 def main(args):
-    alignment_output_dir = "processed/alignment"
     print("PDB download stage started...")
-    receptor_targets, ligand_targets = pdb_downloader()
+    receptor_targets, ligand_targets = pdb_downloader(args)
     targets = receptor_targets + ligand_targets
     targets = list(set(targets))
     for r, l in zip(receptor_targets, ligand_targets):
@@ -41,25 +40,14 @@ def main(args):
     print("Surface extraction stage finished...")
 
     print("Structural alignment stage started...")
-    # Local change: optional backend switch; default remains original TMalign pipeline.
     if args.aligner == "tmalign":
         align(targets, templates)
     else:
-        alignment_output_dir = "processed/alignment_gtalign"
-        align_gtalign(
-            targets,
-            templates,
-            gtalign_path=args.gtalign_path,
-            output_dir=alignment_output_dir,
-            dev_min_length=args.gtalign_dev_min_length,
-            pre_score=args.gtalign_pre_score,
-            speed=args.gtalign_speed,
-            refinement=args.gtalign_refinement,
-        )
+        align_gtalign(targets, templates)
     print("Structural alignment stage finished...")
 
     print("Transformation filtering stage started...")
-    passed_pairs = transformer(receptor_targets, ligand_targets, templates)
+    passed_pairs = transformer(templates)
     print("Passed pairs", len(passed_pairs))
     for pair in passed_pairs:
         print(pair)
@@ -71,13 +59,8 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("--inputs_csv", type=str, default="inputs.csv")
     parser.add_argument("--generate_templates", type=bool, default=False)
-    # Local change: keep TMalign as default; allow GTalign on user request.
     parser.add_argument("--aligner", choices=["tmalign", "gtalign"], default="tmalign")
-    parser.add_argument("--gtalign_path", type=str, default="gtalign")
-    parser.add_argument("--gtalign_dev_min_length", type=int, default=3)
-    parser.add_argument("--gtalign_pre_score", type=float, default=0.0)
-    parser.add_argument("--gtalign_speed", type=int, default=0)
-    parser.add_argument("--gtalign_refinement", type=int, default=3)
     args = parser.parse_args()
     main(args)

@@ -12,7 +12,7 @@ def download_pdb_file(pdb_name, pdb_dir):
     gz_file = f"{pdb_dir}/{pdb_name}.ent.gz"
 
     try:
-        url = f"https://files.pdbj.org/pub/pdb/data/structures/all/pdb/pdb{pdb_name[:4].lower()}.ent.gz"
+        url = f"https://files.pdbj.org/pub/pdb/data/structures/all/pdb/pdb{pdb_name}.ent.gz"
         response = urllib.request.urlopen(url)
 
         with open(gz_file, "wb") as fh:
@@ -28,30 +28,24 @@ def download_pdb_file(pdb_name, pdb_dir):
         print(f"PDB download failed for {pdb_name}: {e}")
         return False
 
-def pdb_downloader():
+def pdb_downloader(args):
     receptor_targets = []
     ligand_targets = []
 
-    # Read pair list
-    df = pd.read_csv("inputs.csv")
-    for _, row in df.iterrows():
-        if len(row["Receptor"]) == 5 and len(row["Ligand"]) == 5:
-            receptor_targets.append(row["Receptor"])
-            ligand_targets.append(row["Ligand"])
-        else:
-            print(f"Skipping target {row['Receptor']} or {row['Ligand']} because it is not a 5-letter PDB ID. We only accept single chain PDB IDs.")
+    df = pd.read_csv(args.inputs_csv)
+
+    for receptor, ligand in zip(df["Receptor"], df["Ligand"]):
+        receptor_pdb_id = receptor[:4].lower()
+        ligand_pdb_id = ligand[:4].lower()
+        if not os.path.exists(f"{TARGET_DIR}/{receptor_pdb_id}.pdb") and not download_pdb_file(receptor_pdb_id, TARGET_DIR):
+            print(f"Failed to download PDB {receptor_pdb_id}")
             continue
-    
-    # Download and process PDBs
-    for target in list(set(receptor_targets + ligand_targets)):
-        if not os.path.exists(f"{TARGET_DIR}/{target[:4].lower()}.pdb"):
-            if not download_pdb_file(target[:4].lower(), TARGET_DIR):
-                print(f"Failed to download PDB {target}")
-                continue
-        else:
-            print(f"PDB {target} already exists")
+        if not os.path.exists(f"{TARGET_DIR}/{ligand_pdb_id}.pdb") and not download_pdb_file(ligand_pdb_id, TARGET_DIR):
+            print(f"Failed to download PDB {ligand_pdb_id}")
+            continue
 
-    return list(set(receptor_targets)), list(set(ligand_targets))
+        receptor_targets.append(receptor_pdb_id)
+        ligand_targets.append(ligand_pdb_id)
 
-if __name__ == "__main__":
-    pdb_downloader()
+    assert len(receptor_targets) == len(ligand_targets), "Number of receptor and ligand targets must be the same"
+    return receptor_targets, ligand_targets

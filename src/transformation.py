@@ -21,62 +21,82 @@ HOTSPOT_COUNT = 1
 TEMPLATE_RESIDUE_COUNT = 50
 CONTACT_COUNT_THRESHOLD = 5
 
-_alignment_cache = {}
+passed_pairs = []
+template_size = {}
 
-def transformer(receptor_targets, ligand_targets, templates):
-    passed_pairs = []
-    for template in tqdm(templates):
-        for receptor, ligand in zip(receptor_targets, ligand_targets):
-            pairs = process_pair_for_template(template, receptor, ligand)
-            if pairs is not []:
-                passed_pairs.extend(pairs)
+def transformer(templates):
+    df = pd.read_csv("inputs.csv")
+
+    for template in templates:
+        chain1 = template[4]
+        chain2 = template[5]
+
+        with open(os.path.join("templates", "interfaces_lists", f"{template}.json"), "r") as f:
+            data = json.load(f)
+
+        template_size[f"{template}_{chain1}"] = len(data[chain1])
+        template_size[f"{template}_{chain2}"] = len(data[chain2])
+
+        for left_query, right_query in zip(df["Receptor"], df["Ligand"]):
+            process_pair_for_template(template, chain1, chain2, left_query, right_query)
+
     return passed_pairs
 
-def load_alignment(protein, template, chain_id):
-    if protein not in _alignment_cache:
-        csv_path = f"processed/alignment/{protein}.csv"
-        if not os.path.exists(csv_path):
-            return None
-        _alignment_cache[protein] = pd.read_csv(csv_path)
-    df = _alignment_cache[protein]
-    row = df[(df["template"] == template) & (df["chain"] == chain_id)]
-    if row.empty:
-        return None
-    row = row.iloc[0]
-    return {
-        "match_count": int(row["match_count"]),
-        "tm_score": float(row["tm_score"]),
-        "translation": json.loads(row["translation"]),
-        "rotation_mat": json.loads(row["rotation_mat"]),
-    }
+def load_alignment(query_id, template, chain_id):
+    path = os.path.join("processed/alignment", f"{query_id}_{template}_{chain_id}.json")
+    with open(path, "r") as f:
+        return json.load(f)
 
-def process_pair_for_template(template, receptor, ligand):
-    passed_pairs = []
-    chain1 = template[4]
-    chain2 = template[5]
+def hotspot_analysis(match_dict):
+    return True
 
-    receptor_align_1 = load_alignment(receptor, template, chain1)
-    ligand_align_2 = load_alignment(ligand, template, chain2)
-    passed_pairs.append(create_transformed_pair(template, receptor, ligand, receptor_align_1, ligand_align_2, "o1"))
+def alignment_passes_thresholds(template, chain, alignment):
+    match_count = alignment['match_count']
+    tm_score = alignment['tm_score']
+    match_dict = alignment['match_dict']
+    
+    with open(os.path.join("templates", "interfaces_lists", f"{template}.json"), "r") as f:
+        data = json.load(f)
 
-    receptor_align_2 = load_alignment(receptor, template, chain2)
-    ligand_align_1 = load_alignment(ligand, template, chain1)
-    passed_pairs.append(create_transformed_pair(template, receptor, ligand, receptor_align_2, ligand_align_1, "o2"))
-    return passed_pairs
+    protein_size = len(data[chain])
+    if protein_size <= 0 or match_count < MINIMUM_RESIDUE_MATCH_COUNT or tm_score < TM_SCORE_THRESHOLD or not hotspot_analysis(match_dict):
+       return False
 
-def create_transformed_pair(template, receptor, ligand, receptor_alignment, ligand_alignment, orientation_suffix):
-    receptor_pdb = f"processed/pdbs/{receptor}.pdb"
-    ligand_pdb = f"processed/pdbs/{ligand}.pdb"
+    match_score = (match_count / protein_size) * 100.0
+
+    if protein_size > TEMPLATE_RESIDUE_COUNT:
+        return match_score > (MINIMUM_RESIDUE_MATCH_PERCENTAGE - DIFF_PERCENTAGE)
+    else:
+        return match_score > MINIMUM_RESIDUE_MATCH_PERCENTAGE
+
+def process_pair_for_template(template, chain1, chain2, left_query, right_query):
+    left_key_chain1 = f"{template}_{chain1}"
+    left_key_chain2 = f"{template}_{chain2}"
+
+    left_align_1 = load_alignment(left_query, template, chain1)
+    right_align_1 = load_alignment(right_query, template, chain2)
+
+    if alignment_passes_thresholds(left_key_chain1, left_align_1) and alignment_passes_thresholds(left_key_chain2, right_align_1):
+        create_transformed_pair(template, left_query, right_query, left_align_1, right_align_1, passed_pairs, "o1")
+
+    left_align_2 = load_alignment(left_query, template, chain2)
+    right_align_2 = load_alignment(right_query, template, chain1)
+
+    if alignment_passes_thresholds(left_key_chain2, left_align_2) and alignment_passes_thresholds(left_key_chain1, right_align_2):
+        create_transformed_pair(template, left_query, right_query, left_align_2, right_align_2, passed_pairs, "o2")
+
+def create_transformed_pair(template, left_query, right_query, left_alignment, right_alignment, passed_pairs, orientation_suffix):
+    left_input = f"processed/pdbs/{left_query}.pdb"
+    right_input = f"processed/pdbs/{right_query}.pdb"
 
     receptor_output = f"processed/transformation/{template}_{receptor}_{ligand}_{orientation_suffix}_R.pdb"
     ligand_output = f"processed/transformation/{template}_{receptor}_{ligand}_{orientation_suffix}_L.pdb"
 
-    apply_tm_transform(receptor_pdb, receptor_output, receptor_alignment['translation'], receptor_alignment['rotation_mat'])
-    apply_tm_transform(ligand_pdb, ligand_output, ligand_alignment['translation'], ligand_alignment['rotation_mat'])
+    apply_tm_transform(left_input, left_output, left_alignment.get("translation", [0.0, 0.0, 0.0]), left_alignment.get("rotation_mat", [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]))
+    apply_tm_transform(right_input, right_output, right_alignment.get("translation", [0.0, 0.0, 0.0]), right_alignment.get("rotation_mat", [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]))
 
-    if pair_has_acceptable_clashes(receptor_output, ligand_output):
-        return [receptor_output, ligand_output]
-    return None
+    if pair_has_acceptable_clashes(left_output, right_output):
+        passed_pairs.append((left_output, right_output))
 
 def apply_tm_transform(input_pdb, output_pdb, translation, rotation_mat):
     try:
@@ -116,8 +136,12 @@ def apply_tm_transform(input_pdb, output_pdb, translation, rotation_mat):
                         f"{line[54:]}"
                     )
                 out_f.write(line)
+        # Local change: return success/failure so caller can skip invalid outputs.
+        return True
     except Exception as exc:
         print(f"Error applying TM transform to {input_pdb}: {exc}")
+        # Local change: signal transform failure to caller.
+        return False
 
 def pair_has_acceptable_clashes(left_path, right_path):
     left_coords = read_ca_coordinates(left_path)

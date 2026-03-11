@@ -1,10 +1,11 @@
-*.pyc
+.pyc
 .DS_Store
+.vscode/
 logs/
-
-templates.zip
-
 templates/
+templates.zip
 processed/
-
 benchmark/data/
+reference/
+
+benchmark/prism_processed/prism_runs/
