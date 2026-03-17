@@ -28,14 +28,33 @@ This workspace now contains only the benchmark environment, benchmark outputs, a
 
 These scripts live in `benchmark/scripts`, not inside `benchmark/prism_processed`:
 
-- `benchmark/scripts/fix_model_chain_names.py`
-- `benchmark/scripts/analyze_prism_rigid_results.py`
-- `benchmark/scripts/analyze_prism_all_benchmarks.py`
+- `benchmark/scripts/rosetta_output/fix_model_chain_names.py`
+- `benchmark/scripts/rosetta_output/analyze_prism_rigid_results.py`
+- `benchmark/scripts/rosetta_output/analyze_prism_all_benchmarks.py`
 - `benchmark/scripts/dockq.py`
 - `benchmark/scripts/irmsd.py`
 - `benchmark/scripts/generate_prism_benchmark_report.py`
 - `benchmark/scripts/validate_prism_pipeline.py`
+- `benchmark/scripts/preflight_benchmark_check.py`
+- `benchmark/scripts/rosetta_output/submit_prism_analysis_all.sbatch`
+
+Current script layout:
+
+- `benchmark/scripts/`
+  - general scoring and validation utilities
+- `benchmark/scripts/rosetta_output/`
+  - PRISM/Rosetta-output-specific benchmark pipeline
+
+Important path changes in the current version:
+
 - `benchmark/scripts/submit_prism_analysis_all.sbatch`
+  - replaced by `benchmark/scripts/rosetta_output/submit_prism_analysis_all.sbatch`
+- `benchmark/scripts/fix_model_chain_names.py`
+  - moved to `benchmark/scripts/rosetta_output/fix_model_chain_names.py`
+- `benchmark/scripts/analyze_prism_rigid_results.py`
+  - moved to `benchmark/scripts/rosetta_output/analyze_prism_rigid_results.py`
+- `benchmark/scripts/analyze_prism_all_benchmarks.py`
+  - moved to `benchmark/scripts/rosetta_output/analyze_prism_all_benchmarks.py`
 
 ## Environment
 
@@ -46,6 +65,11 @@ The benchmark stage needs a Python environment with:
 - `matplotlib`
 - `reportlab`
 - `dockq`
+
+A separate benchmark environment is optional. If the main repo environment
+already contains these benchmark dependencies and a working `DockQ`, you can
+use that environment directly and point `--score-python` to its Python
+interpreter.
 
 Package versions used for the current benchmark run are frozen in:
 
@@ -73,6 +97,11 @@ If you create a fresh environment, replace the `--score-python` path in the comm
 benchmark/prism_processed/env/prism_score_env_fresh/bin/python
 ```
 
+For direct scoring with `benchmark/scripts/score_single_prism_pair.py`, the
+option `--dockq-no-align` passes `--no_align` to DockQ. This is typically
+faster and is appropriate when the model/native mapping and residue numbering
+are already trusted.
+
 ## Reproducible Flow
 
 Workflow summary:
@@ -91,12 +120,12 @@ Workflow summary:
 mkdir -p benchmark/prism_processed/prism_raw
 unzip /path/to/prism_raw.zip -d benchmark/prism_processed/prism_raw
 
-python3 -u benchmark/scripts/fix_model_chain_names.py \
+python3 -u benchmark/scripts/rosetta_output/fix_model_chain_names.py \
   --rosetta-root benchmark/prism_processed/prism_raw/rosetta_output_1 \
   --fixed-root benchmark/prism_processed/prism_raw_chainfixed \
   --map-csv benchmark/prism_processed/results/chain_fix_map.csv
 
-python3 -u benchmark/scripts/analyze_prism_all_benchmarks.py \
+python3 -u benchmark/scripts/rosetta_output/analyze_prism_all_benchmarks.py \
   --rosetta-root benchmark/prism_processed/prism_raw/rosetta_output_1 \
   --data-dir benchmark/data \
   --results-root benchmark/prism_processed/results \
@@ -146,14 +175,14 @@ The archive should be extracted into `benchmark/prism_processed/prism_raw`. If t
 If you want to run the full benchmark on HPC, use:
 
 ```bash
-sbatch benchmark/scripts/submit_prism_analysis_all.sbatch
+sbatch benchmark/scripts/rosetta_output/submit_prism_analysis_all.sbatch
 ```
 
 Optional overrides:
 
 ```bash
 sbatch --export=ALL,SETS=rigid,medium,difficult,SCORE_TIMEOUT_SEC=5 \
-  benchmark/scripts/submit_prism_analysis_all.sbatch
+  benchmark/scripts/rosetta_output/submit_prism_analysis_all.sbatch
 ```
 
 The batch script uses the same paths documented in this README:
@@ -164,6 +193,24 @@ The batch script uses the same paths documented in this README:
 - results: `benchmark/prism_processed/results`
 - scoring environment: `benchmark/prism_processed/env/prism_score_env`
 
+### Safe Preflight Test
+
+Before running the full benchmark job, you can test the current version safely:
+
+```bash
+python3 benchmark/scripts/preflight_benchmark_check.py
+```
+
+This test:
+
+- writes only to a temporary directory
+- does not touch `benchmark/prism_processed/results`
+- does not modify the environment
+- checks script syntax and startup
+- checks the batch script shell syntax
+- runs single-file and folder scoring smoke tests
+- confirms both `DockQ` and `iRMSD` are produced in CSV output
+
 ### Step-by-step
 
 1. Download the PRISM raw archive from the Google Drive link above and extract it into `benchmark/prism_processed/prism_raw`.
@@ -171,7 +218,7 @@ The batch script uses the same paths documented in this README:
 2. Fix chain naming issues in PRISM model files and write the correction map:
 
 ```bash
-python3 -u benchmark/scripts/fix_model_chain_names.py \
+python3 -u benchmark/scripts/rosetta_output/fix_model_chain_names.py \
   --rosetta-root benchmark/prism_processed/prism_raw/rosetta_output_1 \
   --fixed-root benchmark/prism_processed/prism_raw_chainfixed \
   --map-csv benchmark/prism_processed/results/chain_fix_map.csv
@@ -180,7 +227,7 @@ python3 -u benchmark/scripts/fix_model_chain_names.py \
 3. Run benchmark analysis for all benchmark sets:
 
 ```bash
-python3 -u benchmark/scripts/analyze_prism_all_benchmarks.py \
+python3 -u benchmark/scripts/rosetta_output/analyze_prism_all_benchmarks.py \
   --rosetta-root benchmark/prism_processed/prism_raw/rosetta_output_1 \
   --data-dir benchmark/data \
   --results-root benchmark/prism_processed/results \
@@ -255,4 +302,4 @@ Shared outputs:
 - Matching is based on `PDB ID 1` and `PDB ID 2` from model filenames, not the first filename token.
 - Chain fixing is required because some PRISM model PDBs encode multiple segments under a wrong or repeated chain ID.
 - Native bound complexes do not need to be uploaded in advance if you run analysis with `--download-native-missing`.
-- `benchmark/prism_processed` is intentionally results/environment/documentation focused. The executable benchmark scripts remain in `benchmark/scripts`, and benchmark CSVs remain in `benchmark/data`.
+- `benchmark/prism_processed` is intentionally results/environment/documentation focused. General scoring scripts remain in `benchmark/scripts`, Rosetta-output-specific pipeline scripts are in `benchmark/scripts/rosetta_output`, and benchmark CSVs remain in `benchmark/data`.

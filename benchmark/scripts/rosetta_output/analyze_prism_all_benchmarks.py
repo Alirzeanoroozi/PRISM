@@ -3,7 +3,7 @@
 Run PRISM-vs-benchmark analysis for T_Rigid, T_medium, and T_difficult.
 
 This is a thin wrapper around:
-    benchmark/scripts/analyze_prism_rigid_results.py
+    benchmark/scripts/rosetta_output/analyze_prism_rigid_results.py
 
 It reuses the same analyzer with different CSV inputs and separate output/native folders.
 """
@@ -61,12 +61,12 @@ def main():
     parser = argparse.ArgumentParser(description="Run PRISM analysis for rigid/medium/difficult benchmark CSVs")
     parser.add_argument(
         "--rosetta-root",
-        default="benchmark/prism_processed/rosetta_output_1",
+        default="benchmark/prism_processed/prism_raw/rosetta_output_1",
         help="Root directory with PRISM prediction PDBs",
     )
     parser.add_argument(
         "--score-python",
-        default="benchmark/prism_processed_results/prism_score_env/bin/python",
+        default="benchmark/prism_processed/env/prism_score_env/bin/python",
         help="Python interpreter used by the analyzer for DockQ/iRMSD scoring",
     )
     parser.add_argument(
@@ -109,25 +109,25 @@ def main():
     args = parser.parse_args()
 
     repo_root = Path.cwd()
-    analyzer_script = repo_root / "benchmark/scripts/analyze_prism_rigid_results.py"
+    analyzer_script = repo_root / "benchmark/scripts/rosetta_output/analyze_prism_rigid_results.py"
     rosetta_root = repo_root / args.rosetta_root
     score_python = str((repo_root / args.score_python) if not Path(args.score_python).is_absolute() else Path(args.score_python))
 
     set_map = {
         "rigid": {
             "csv": repo_root / "benchmark/data/T_Rigid.csv",
-            "out": repo_root / "benchmark/prism_processed_results/prism_rigid_analysis_all_jobs",
-            "native": repo_root / "benchmark/prism_processed_results/native_bound_complexes_t_rigid",
+            "out": repo_root / "benchmark/prism_processed/results/prism_rigid_analysis_all_jobs",
+            "native": repo_root / "benchmark/prism_processed/results/native_bound_complexes_t_rigid",
         },
         "medium": {
             "csv": repo_root / "benchmark/data/T_medium.csv",
-            "out": repo_root / "benchmark/prism_processed_results/prism_medium_analysis_all_jobs",
-            "native": repo_root / "benchmark/prism_processed_results/native_bound_complexes_t_medium",
+            "out": repo_root / "benchmark/prism_processed/results/prism_medium_analysis_all_jobs",
+            "native": repo_root / "benchmark/prism_processed/results/native_bound_complexes_t_medium",
         },
         "difficult": {
             "csv": repo_root / "benchmark/data/T_difficult.csv",
-            "out": repo_root / "benchmark/prism_processed_results/prism_difficult_analysis_all_jobs",
-            "native": repo_root / "benchmark/prism_processed_results/native_bound_complexes_t_difficult",
+            "out": repo_root / "benchmark/prism_processed/results/prism_difficult_analysis_all_jobs",
+            "native": repo_root / "benchmark/prism_processed/results/native_bound_complexes_t_difficult",
         },
     }
 

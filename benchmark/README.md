@@ -3,10 +3,29 @@
 Run the benchmark pipeline with the Slurm submission script:
 
 ```bash
-sbatch benchmark/scripts/submit_prism_analysis_all.sbatch
+sbatch benchmark/scripts/rosetta_output/submit_prism_analysis_all.sbatch
 ```
 
 This job downloads the PRISM raw archive, extracts it into `benchmark/prism_processed/prism_raw`, fixes problematic model chain names, runs benchmark scoring for the rigid, medium, and difficult sets, downloads missing native bound complexes when needed, and writes the processed benchmark outputs under `benchmark/prism_processed/results`.
+
+Rosetta-output-specific pipeline files now live under `benchmark/scripts/rosetta_output/`. General scoring helpers stay in `benchmark/scripts/`.
+
+## Script Layout
+
+Current script layout after cleanup:
+
+- `benchmark/scripts/`
+  - general benchmark/scoring utilities
+  - examples: `dockq.py`, `irmsd.py`, `score_single_prism_pair.py`, `validate_prism_pipeline.py`
+- `benchmark/scripts/rosetta_output/`
+  - PRISM/Rosetta-output-specific benchmark pipeline
+  - examples: `fix_model_chain_names.py`, `analyze_prism_all_benchmarks.py`, `submit_prism_analysis_all.sbatch`
+
+Important path changes in the current version:
+
+- batch entry point moved from `benchmark/scripts/submit_prism_analysis_all.sbatch` to `benchmark/scripts/rosetta_output/submit_prism_analysis_all.sbatch`
+- Rosetta benchmark analyzers moved from `benchmark/scripts/` to `benchmark/scripts/rosetta_output/`
+- legacy experimental and misc benchmark helper scripts were removed from the active tree
 
 ## Pipeline
 
@@ -17,6 +36,29 @@ This job downloads the PRISM raw archive, extracts it into `benchmark/prism_proc
 5. Download native bound complexes if they are missing locally.
 6. Run `DockQ` and `iRMSD` scoring for matched model/complex comparisons.
 7. Aggregate per-prediction scores into pair-level summaries.
+
+## Safe Testing
+
+To test whether the current version is working without touching production outputs, run:
+
+```bash
+python3 benchmark/scripts/preflight_benchmark_check.py
+```
+
+This preflight script:
+
+- uses only a temporary directory
+- does not write into `benchmark/prism_processed/results`
+- does not modify the active benchmark environment
+- checks script syntax and startup
+- checks the batch script syntax
+- runs single-file and folder scoring smoke tests
+- confirms both `DockQ` and `iRMSD` are produced in CSV outputs
+
+For quick single-pair or folder scoring, `benchmark/scripts/score_single_prism_pair.py`
+also supports `--dockq-no-align`. This passes `--no_align` to DockQ, which is
+usually faster and is appropriate when the model/native chain mapping and residue
+numbering are already trusted.
 
 ## Main Outputs
 
@@ -59,6 +101,10 @@ Shared outputs:
 
 ## Notes
 
+- A separate benchmark virtual environment is optional, not mandatory. If your
+  main repo environment already has the benchmark dependencies installed
+  (`numpy`, `biopython`, `matplotlib`, `reportlab`, `dockq`), you can run the
+  benchmark scripts directly from that environment instead of creating a new one.
 - Benchmark CSV inputs remain in `benchmark/data`.
 - Benchmark scripts remain in `benchmark/scripts`.
 - The detailed reproducibility guide is in `benchmark/prism_processed/README.md`.

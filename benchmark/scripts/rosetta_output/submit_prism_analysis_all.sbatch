@@ -1,9 +1,9 @@
 #!/bin/bash
 # Submit with:
-#   sbatch benchmark/scripts/submit_prism_analysis_all.sbatch
+#   sbatch benchmark/scripts/rosetta_output/submit_prism_analysis_all.sbatch
 #
 # Optional overrides:
-#   sbatch --export=ALL,SETS=rigid,medium,difficult,SCORE_TIMEOUT_SEC=5 benchmark/scripts/submit_prism_analysis_all.sbatch
+#   sbatch --export=ALL,SETS=rigid,medium,difficult,SCORE_TIMEOUT_SEC=5 benchmark/scripts/rosetta_output/submit_prism_analysis_all.sbatch
 
 #SBATCH --job-name=prism-bench
 #SBATCH --account=ai
@@ -126,12 +126,12 @@ extract_prism_archive
 
 echo "[info] resolved rosetta_root: $ROSETTA_ROOT"
 
-python3 -u benchmark/scripts/fix_model_chain_names.py \
+python3 -u benchmark/scripts/rosetta_output/fix_model_chain_names.py \
   --rosetta-root "$ROSETTA_ROOT" \
   --fixed-root "$FIXED_ROOT" \
   --map-csv "$CHAIN_FIX_MAP"
 
-python3 -u benchmark/scripts/analyze_prism_all_benchmarks.py \
+python3 -u benchmark/scripts/rosetta_output/analyze_prism_all_benchmarks.py \
   --rosetta-root "$ROSETTA_ROOT" \
   --data-dir "$DATA_DIR" \
   --results-root "$RESULTS_ROOT" \

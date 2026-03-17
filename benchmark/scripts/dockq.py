@@ -9,12 +9,33 @@ Requires: pip install DockQ
 Ref: https://github.com/wallnerlab/DockQ
 """
 import json
+import os
+import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
 
-def calculate_dockq(model_pdb, native_pdb, mapping=None, work_dir=None):
+def resolve_dockq_executable():
+    override = os.environ.get("DOCKQ_BIN")
+    if override:
+        return [override]
+    try:
+        import DockQ  # noqa: F401
+        return [sys.executable, "-m", "DockQ"]
+    except Exception:
+        pass
+    env_candidate = Path(sys.executable).resolve().parent / "DockQ"
+    if env_candidate.is_file():
+        return [str(env_candidate)]
+    found = shutil.which("DockQ")
+    if found:
+        return [found]
+    return None
+
+
+def calculate_dockq(model_pdb, native_pdb, mapping=None, work_dir=None, no_align=False):
     """
     Run DockQ to compare a model PDB against a native reference PDB.
 
@@ -52,8 +73,12 @@ def calculate_dockq(model_pdb, native_pdb, mapping=None, work_dir=None):
     work_dir.mkdir(parents=True, exist_ok=True)
     json_file = work_dir / "dockq_out.json"
 
+    dockq_bin = resolve_dockq_executable()
+    if not dockq_bin:
+        raise RuntimeError("DockQ not found. Install with: pip install DockQ")
+
     cmd = [
-        "DockQ",
+        *dockq_bin,
         str(model_pdb),
         str(native_pdb),
         "--json",
@@ -61,6 +86,8 @@ def calculate_dockq(model_pdb, native_pdb, mapping=None, work_dir=None):
     ]
     if mapping is not None:
         cmd.extend(["--mapping", str(mapping)])
+    if no_align:
+        cmd.append("--no_align")
 
     try:
         result = subprocess.run(
@@ -74,10 +101,6 @@ def calculate_dockq(model_pdb, native_pdb, mapping=None, work_dir=None):
             raise RuntimeError(
                 f"DockQ failed (exit {result.returncode}): {result.stderr or result.stdout}"
             )
-    except FileNotFoundError:
-        raise RuntimeError(
-            "DockQ not found. Install with: pip install DockQ"
-        ) from None
     except subprocess.TimeoutExpired:
         raise RuntimeError("DockQ timed out")
     except Exception as e:
@@ -161,12 +184,18 @@ if __name__ == "__main__":
         default=None,
         help="Chain mapping MODELCHAINS:NATIVECHAINS (e.g., AB:HL)",
     )
+    parser.add_argument(
+        "--no-align",
+        action="store_true",
+        help="Pass --no_align to DockQ",
+    )
     args = parser.parse_args()
 
     result = calculate_dockq(
         args.model_pdb,
         args.native_pdb,
         mapping=args.mapping,
+        no_align=args.no_align,
     )
     print("DockQ:", result["dockq"])
     print("CAPRI class:", dockq_to_capri_class(result["dockq"]))
