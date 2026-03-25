@@ -44,8 +44,8 @@ def pdb_downloader(args):
             print(f"Failed to download PDB {ligand_pdb_id}")
             continue
 
-        receptor_targets.append(receptor_pdb_id)
-        ligand_targets.append(ligand_pdb_id)
+        receptor_targets.append(receptor)
+        ligand_targets.append(ligand)
 
     assert len(receptor_targets) == len(ligand_targets), "Number of receptor and ligand targets must be the same"
     return receptor_targets, ligand_targets

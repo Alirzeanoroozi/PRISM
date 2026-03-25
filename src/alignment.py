@@ -4,14 +4,15 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from Bio.PDB import PDBParser
 import json
 import csv
+import pandas as pd
 from tqdm import tqdm
 
 os.makedirs("processed/alignment", exist_ok=True)
 
 MINIMUM_RESIDUE_MATCH_COUNT = 15
-MINIMUM_RESIDUE_MATCH_PERCENTAGE = 50.0
+MINIMUM_RESIDUE_MATCH_PERCENTAGE = 10.0
 DIFF_PERCENTAGE = 20.0
-TM_SCORE_THRESHOLD = 0.5
+TM_SCORE_THRESHOLD = 0.2
 TEMPLATE_RESIDUE_COUNT = 50
 
 def check_alignment_passes_thresholds(alignment):
@@ -19,7 +20,7 @@ def check_alignment_passes_thresholds(alignment):
     tm_score = alignment['tm_score']
     len_template = alignment['len_template']
 
-    if match_count < MINIMUM_RESIDUE_MATCH_COUNT or tm_score < TM_SCORE_THRESHOLD:
+    if len_template <= 0 or match_count < MINIMUM_RESIDUE_MATCH_COUNT or tm_score < TM_SCORE_THRESHOLD:
         return False
 
     match_score = (match_count / len_template) * 100.0
@@ -30,7 +31,7 @@ def check_alignment_passes_thresholds(alignment):
         return match_score > MINIMUM_RESIDUE_MATCH_PERCENTAGE
 
 def _run_single_alignment(protein, template, chain):
-    protein_path = f"processed/surface_extraction/{protein}.asa.pdb"
+    protein_path = f"processed/surface_extraction/{protein}_asa.pdb"
     interface_path = f"templates/interfaces/{template}_{chain}_int.pdb"
     matrix_path = f"processed/alignment/{protein}_{template}_{chain}_matrix.out"
     tm_path = f"processed/alignment/{protein}_{template}_{chain}_out.tm"
@@ -94,21 +95,22 @@ def align(targets, templates):
                 rows.append(row)
 
     if rows:
-        fieldnames = ["protein", "template", "chain", "match_count", "tm_score", "len_target", "len_template", "translation", "rotation_mat", "match_dict"]
+        fieldnames = ["protein", "template", "chain", "match_count", "tm_score", "len_target", "len_template", "translation", "rotation_mat"]
         rows_by_target = {}
         for row in rows:
             target = row["protein"]
             if check_alignment_passes_thresholds(row):
                 rows_by_target.setdefault(target, []).append(row)
-            else:
-                print(f"Alignment {row['protein']}_{row['template']}_{row['chain']} did not pass thresholds.")
-                continue
+
         for target, target_rows in rows_by_target.items():
             output_csv = f"processed/alignment/{target}.csv"
             with open(output_csv, "w", newline="") as f:
                 writer = csv.DictWriter(f, fieldnames=fieldnames)
                 writer.writeheader()
                 writer.writerows(target_rows)
+            df = pd.read_csv(output_csv)
+            df.sort_values(by=["tm_score"], ascending=False, inplace=True)
+            df.to_csv(output_csv, index=False)
             print(f"Wrote {len(target_rows)} alignments to {output_csv}")
 
 def parse_tmalign(protein_path, interface_path, protein, template, chain):
@@ -145,11 +147,11 @@ def parse_tmalign(protein_path, interface_path, protein, template, chain):
         for line in tm_file:
             if line.startswith("Aligned length"):
                 match_count = int(line.split("=")[1].split(",")[0].strip())
-            if line.startswith("Length of chain_1"):
+            if line.startswith("Length of Chain_1"):
                 len_target = int(line.split(":")[1].split("residues")[0].strip())
-            if line.startswith("Length of chain_2"):
+            if line.startswith("Length of Chain_2"):
                 len_template = int(line.split(":")[1].split("residues")[0].strip())
-            elif line.startswith("TM-score"):
+            if line.startswith("TM-score"):
                 tmscore = float(line.split()[1])
                 if "Chain_1" in line:
                     tm_score_1 = tmscore
@@ -176,5 +178,4 @@ def extract_chain_and_res_ids(name, path):
                 if chain.id not in residues:
                     residues[chain.id] = []
                 residues[chain.id].append(str(residue.id[1]))
-
     return residues

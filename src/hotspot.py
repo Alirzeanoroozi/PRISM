@@ -6,7 +6,7 @@ from Bio.PDB import PDBParser
 from Bio.PDB.Polypeptide import is_aa
 
 from .utils import distance_calculator, three2one, ATOM_DICT, PAIR_POTENTIAL
-from .naccess_utils import get_asa_complex
+from .sasa_utils import get_asa_complex
 
 RELATIVE_ASA_THRESHOLD = 20.0
 CONTACT_POTENTIAL_THRESHOLD = 18.0

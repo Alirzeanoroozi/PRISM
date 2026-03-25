@@ -41,21 +41,21 @@ def main(args):
 
     print("Structural alignment stage started...")
     if args.aligner == "tmalign":
-        align(targets, templates)
+        align(targets, templates[:100])
     else:
         align_gtalign(targets, templates)
     print("Structural alignment stage finished...")
 
     print("Transformation filtering stage started...")
-    passed_pairs = transformer(templates)
+    passed_pairs = transformer(receptor_targets, ligand_targets)
     print("Passed pairs", len(passed_pairs))
     for pair in passed_pairs:
         print(pair)
     print("Transformation filtering stage finished...")
 
-    print("Rosetta refinement stage started...")
-    refiner(passed_pairs)
-    print("Rosetta refinement stage finished...")
+    # print("Rosetta refinement stage started...")
+    # refiner(passed_pairs)
+    # print("Rosetta refinement stage finished...")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
