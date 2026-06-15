@@ -1,77 +1,96 @@
+"""Rosetta refinement stage using PyRosetta.
+
+Supports multi-chain receptor/ligand inputs. Accepted `passed_pairs` tuples may
+be either:
+  - 2-tuples `(receptor_path, ligand_path)`
+  - 4-tuples `(receptor_id, ligand_id, template_id, complex_pdb_path)` as
+    produced by `transformation.transformer`.
 """
-Rosetta refinement stage using PyRosetta.
-Supports multi-chain inputs: ligand and receptor can each have multiple chains,
-or all/selected chains from the PDB.
-"""
+
 import os
 import shutil
 
 from .contact import get_contacts_from_atom_lines
 
-ROSETTA_DB = os.environ.get(
-    "ROSETTA_DB",
-    "/opt/ohpc/pub/apps/rosetta/rosetta_bin_linux_2022.42_bundle/main/database/",
-)
-ROSETTA_INT_SCORE_THRESHOLD = -5.0
+ROSETTA_INT_SCORE_THRESHOLD = float(os.environ.get("ROSETTA_INT_SCORE_THRESHOLD", -5.0))
 
 ROSETTA_DIR = "processed/rosetta_refinement"
 ENERGY_DIR = os.path.join(ROSETTA_DIR, "energies")
 STRUCTURE_DIR = os.path.join(ROSETTA_DIR, "structures")
-
 os.makedirs(ROSETTA_DIR, exist_ok=True)
 os.makedirs(ENERGY_DIR, exist_ok=True)
 os.makedirs(STRUCTURE_DIR, exist_ok=True)
 
 
 def refiner(passed_pairs):
-    """Run Rosetta refinement on passed receptor-ligand pairs."""
-    passed_pairs = [p for p in passed_pairs if p is not None]
-    with open(os.path.join(ROSETTA_DIR, "refinement_energies.txt"), "w") as file_out:
-        for passed0, passed1 in passed_pairs:
-            totalscore, intscore, _ = calculate_energy(passed0, passed1)
-            if intscore != "-":
-                file_out.write(f"{passed0}\t{passed1}\t{intscore}\t{totalscore}\n")
+    summary_path = os.path.join(ROSETTA_DIR, "refinement_energies.txt")
+    rows = []
+    for entry in passed_pairs:
+        if entry is None:
+            continue
+        receptor_path, ligand_path, left_chains, right_chains, combined_path = _resolve_entry(entry)
+        if not receptor_path or not ligand_path:
+            continue
+        totalscore, intscore, out_path = calculate_energy(
+            receptor_path, ligand_path,
+            combined_path=combined_path,
+            left_chains=left_chains,
+            right_chains=right_chains,
+        )
+        if intscore != "-":
+            rows.append((receptor_path, ligand_path, intscore, totalscore, out_path))
+
+    with open(summary_path, "w") as fh:
+        for rec, lig, isc, tsc, op in rows:
+            fh.write(f"{rec}\t{lig}\t{isc}\t{tsc}\t{op}\n")
+    return rows
 
 
-def calculate_energy(passed0, passed1):
-    """
-    Run prepack + docking local refine via PyRosetta.
-    Supports multi-chain receptor and ligand (e.g. AB_CD).
-    """
+def _resolve_entry(entry):
+    """Accept legacy `(rec_path, lig_path)` and new `(rec_id, lig_id, template, combined_pdb)`."""
+    if len(entry) == 2:
+        rec_path, lig_path = entry
+        return rec_path, lig_path, _extract_chain_ids(rec_path), _extract_chain_ids(lig_path), None
+    if len(entry) == 4:
+        rec_id, lig_id, template, combined = entry
+        rec_path = f"processed/transformation/{template}_{rec_id}_{lig_id}_R.pdb"
+        lig_path = f"processed/transformation/{template}_{rec_id}_{lig_id}_L.pdb"
+        return rec_path, lig_path, _extract_chain_ids(rec_path), _extract_chain_ids(lig_path), combined
+    return None, None, None, None, None
+
+
+def calculate_energy(receptor_path, ligand_path, combined_path=None, left_chains=None, right_chains=None):
     try:
         import pyrosetta
         from pyrosetta.rosetta.core.import_pose import pose_from_file
         from pyrosetta.rosetta.protocols.docking import setup_foldtree
         from pyrosetta.rosetta.utility import Vector1
-    except ImportError as e:
-        print(f"PyRosetta not available: {e}. Install with: pip install pyrosetta")
+    except ImportError as exc:
+        print(f"PyRosetta not available: {exc}")
         return "-", "-", "-"
 
     try:
-        combined_path = combine_pdb(passed0, passed1)
-        if not combined_path:
-            return "-", "-", "-"
+        if combined_path is None or not os.path.exists(combined_path):
+            combined_path = combine_pdb(receptor_path, ligand_path)
+            if not combined_path:
+                return "-", "-", "-"
 
-        left_chains = _extract_chain_ids(passed0)
-        right_chains = _extract_chain_ids(passed1)
+        if not left_chains:
+            left_chains = _extract_chain_ids(receptor_path)
+        if not right_chains:
+            right_chains = _extract_chain_ids(ligand_path)
         if not left_chains or not right_chains:
-            print(f"Could not determine partner chains for {passed0} and {passed1}")
+            print(f"Could not determine partner chains for {receptor_path} / {ligand_path}")
             return "-", "-", "-"
-        # Multi-chain format: "AB_CD" for chains A,B vs C,D
         partner_chains = f"{''.join(left_chains)}_{''.join(right_chains)}"
 
         out_name = os.path.splitext(os.path.basename(combined_path))[0]
 
-        # Initialize PyRosetta (no-op if already initialized)
-        pyrosetta.init(
-            extra_options="-ex1 -ex2aro -ignore_zero_occupancy false -detect_disulf false"
-        )
-
+        pyrosetta.init(extra_options="-ex1 -ex2aro -ignore_zero_occupancy false -detect_disulf false")
         pose = pose_from_file(combined_path)
         jump_num = Vector1(1)
         setup_foldtree(pose, partner_chains, jump_num)
 
-        # Prepack
         try:
             from pyrosetta.rosetta.protocols.docking import DockingPrepackProtocol
             prepack = DockingPrepackProtocol(jump_num[1])
@@ -82,7 +101,6 @@ def calculate_energy(passed0, passed1):
         prepacked_path = os.path.join(ROSETTA_DIR, f"{out_name}_0001.pdb")
         pose.dump_pdb(prepacked_path)
 
-        # Docking local refine
         try:
             from pyrosetta.rosetta.protocols.docking import DockMCMProtocol
             from pyrosetta import create_score_function
@@ -93,78 +111,61 @@ def calculate_energy(passed0, passed1):
             except AttributeError:
                 pass
             dock.apply(pose)
-        except Exception as e:
-            print(f"DockMCMProtocol failed: {e}; trying DockingProtocol fallback")
+        except Exception as exc:
+            print(f"DockMCMProtocol failed: {exc}; falling back to perturb+min")
             _dock_local_refine_fallback(pose, jump_num[1])
 
-        out_pdb_name = f"{out_name}_0001_0001.pdb"
-        rosetta_out_path = os.path.join(STRUCTURE_DIR, out_pdb_name)
-        final_out_path = os.path.join(ROSETTA_DIR, out_pdb_name)
-        # DockMCM modifies pose in place; dump the refined pose
+        rosetta_out_path = os.path.join(STRUCTURE_DIR, f"{out_name}_refined.pdb")
+        final_out_path = os.path.join(ROSETTA_DIR, f"{out_name}_refined.pdb")
         pose.dump_pdb(rosetta_out_path)
 
-        # Parse scores (try score.sc or from pose)
-        totalscore = "-"
-        interaction_score = "-"
-        score_path = os.path.join(ENERGY_DIR, "score.sc")
-        renamed_score = os.path.join(ENERGY_DIR, f"{out_name}_score.sc")
-        if os.path.exists(score_path):
-            shutil.move(score_path, renamed_score)
-            with open(renamed_score, "r") as sf:
-                for i, line in enumerate(sf):
-                    if i == 2:
-                        parts = line.split()
-                        if len(parts) >= 6:
-                            totalscore = float(parts[1].strip())
-                            interaction_score = float(parts[5].strip())
-                        break
-        else:
-            try:
-                from pyrosetta.rosetta.core.scoring import Interface
-                scorefxn = pyrosetta.create_score_function("ref2015")
-                scorefxn(pose)
-                totalscore = pose.energies().total_energy()
-                interface = Interface(jump_num[1])
-                interface.calculate(pose)
-                interaction_score = interface.interface_energy(pose, scorefxn)
-            except Exception:
-                pass
+        totalscore, interaction_score = _compute_scores(pose, jump_num[1], out_name)
 
-        if (
-            os.path.exists(rosetta_out_path)
-            and interaction_score != "-"
-            and float(interaction_score) <= ROSETTA_INT_SCORE_THRESHOLD
-        ):
+        if (os.path.exists(rosetta_out_path) and interaction_score != "-"
+                and float(interaction_score) <= ROSETTA_INT_SCORE_THRESHOLD):
             shutil.copy2(rosetta_out_path, final_out_path)
-            structure_list_0, structure_list_1 = _extract_atom_lines_by_partners(
-                final_out_path, left_chains, right_chains
-            )
+            lines_l, lines_r = _extract_atom_lines_by_partners(final_out_path, left_chains, right_chains)
             int_res_path = f"{final_out_path}.intRes.txt"
             try:
-                get_contacts_from_atom_lines(
-                    final_out_path, int_res_path, structure_list_0, structure_list_1
-                )
-            except Exception as e:
-                print(f"Exception during get_contacts_from_atom_lines: {e}")
+                get_contacts_from_atom_lines(final_out_path, int_res_path, lines_l, lines_r)
+            except Exception as exc:
+                print(f"Failed to compute contact map post-refinement: {exc}")
             return str(totalscore), str(interaction_score), final_out_path
 
-        if not os.path.exists(rosetta_out_path):
-            print(f"Structure file not found: {rosetta_out_path}")
-        elif interaction_score == "-":
-            print(f"Interaction score is '-' for {rosetta_out_path}")
-        else:
-            print(f"Interaction score {interaction_score} exceeds threshold for {rosetta_out_path}")
         return "-", "-", "-"
 
-    except Exception as e:
-        print(f"Exception during calculate_energy: {e}")
-        import traceback
-        traceback.print_exc()
+    except Exception as exc:
+        print(f"Rosetta refinement failed: {exc}")
         return "-", "-", "-"
+
+
+def _compute_scores(pose, jump_num_value, out_name):
+    import pyrosetta
+    score_path = os.path.join(ENERGY_DIR, "score.sc")
+    renamed = os.path.join(ENERGY_DIR, f"{out_name}_score.sc")
+    if os.path.exists(score_path):
+        shutil.move(score_path, renamed)
+        with open(renamed) as sf:
+            for i, line in enumerate(sf):
+                if i == 2:
+                    parts = line.split()
+                    if len(parts) >= 6:
+                        return float(parts[1]), float(parts[5])
+                    break
+    try:
+        from pyrosetta.rosetta.core.scoring import Interface
+        scorefxn = pyrosetta.create_score_function("ref2015")
+        scorefxn(pose)
+        total = pose.energies().total_energy()
+        interface = Interface(jump_num_value)
+        interface.calculate(pose)
+        intscore = interface.interface_energy(pose, scorefxn)
+        return total, intscore
+    except Exception:
+        return "-", "-"
 
 
 def _prepack_with_pack_rotamers(pose):
-    """Fallback prepack using PackRotamersMover."""
     from pyrosetta import create_score_function
     from pyrosetta.rosetta.protocols.minimization_packing import PackRotamersMover
     from pyrosetta.rosetta.core.pack.task import TaskFactory
@@ -178,90 +179,63 @@ def _prepack_with_pack_rotamers(pose):
 
 
 def _dock_local_refine_fallback(pose, jump_num):
-    """Fallback docking local refine using RigidBodyPerturbMover + MinMover."""
     from pyrosetta import create_score_function
     from pyrosetta.rosetta.protocols.rigid import RigidBodyPerturbMover
     from pyrosetta.rosetta.protocols.minimization_packing import MinMover
     from pyrosetta.rosetta.core.kinematics import MoveMap
     scorefxn = create_score_function("ref2015")
-    pert = RigidBodyPerturbMover(jump_num, 3, 1)
-    pert.apply(pose)
+    RigidBodyPerturbMover(jump_num, 3, 1).apply(pose)
     mm = MoveMap()
-    mm.set_bb(False)
-    mm.set_chi(True)
-    mm.set_jump(True)
-    min_mover = MinMover(mm, scorefxn, "lbfgs_armijo_nonmonotone", 0.01, True)
-    min_mover.apply(pose)
+    mm.set_bb(False); mm.set_chi(True); mm.set_jump(True)
+    MinMover(mm, scorefxn, "lbfgs_armijo_nonmonotone", 0.01, True).apply(pose)
 
 
-def combine_pdb(passed0, passed1):
-    """Combine receptor and ligand PDBs into one file (multi-chain supported)."""
+def combine_pdb(receptor_path, ligand_path):
     try:
-        base0 = os.path.splitext(os.path.basename(passed0))[0]
-        base1 = os.path.splitext(os.path.basename(passed1))[0]
-        combined_path = os.path.join(ROSETTA_DIR, f"{base0}_{base1}_rosetta.pdb")
-        with (
-            open(passed0, "r") as p0file,
-            open(passed1, "r") as p1file,
-            open(combined_path, "w") as combinedfile,
-        ):
-            for line in p0file:
-                if line.startswith("ATOM") or line.startswith("HETATM"):
-                    combinedfile.write(line)
-            combinedfile.write("TER\n")
-            for line in p1file:
-                if line.startswith("ATOM") or line.startswith("HETATM"):
-                    combinedfile.write(line)
-            combinedfile.write("END\n")
+        base0 = os.path.splitext(os.path.basename(receptor_path))[0]
+        base1 = os.path.splitext(os.path.basename(ligand_path))[0]
+        combined_path = os.path.join(ROSETTA_DIR, f"{base0}_{base1}_combined.pdb")
+        serial = 1
+        with open(combined_path, "w") as out_f:
+            for path in (receptor_path, ligand_path):
+                with open(path) as fh:
+                    for line in fh:
+                        if line.startswith(("ATOM", "HETATM")):
+                            out_f.write(f"{line[:6]}{serial:5d}{line[11:]}")
+                            serial += 1
+                out_f.write("TER\n")
+            out_f.write("END\n")
         return combined_path
-    except Exception as e:
-        print(f"Exception during combine_pdb: {e}")
+    except Exception as exc:
+        print(f"combine_pdb failed: {exc}")
         return ""
 
 
 def _extract_chain_ids(pdb_path):
-    """Extract all chain IDs from a PDB (supports multi-chain)."""
     chain_ids = []
     seen = set()
-    try:
-        with open(pdb_path, "r") as fh:
-            for line in fh:
-                if line.startswith("ATOM") or line.startswith("HETATM"):
-                    if len(line) >= 22:
-                        ch = line[21]
-                        if ch not in seen:
-                            seen.add(ch)
-                            chain_ids.append(ch)
-    except Exception as exc:
-        print(f"Could not read chain IDs from {pdb_path}: {exc}")
+    if not pdb_path or not os.path.exists(pdb_path):
+        return chain_ids
+    with open(pdb_path) as fh:
+        for line in fh:
+            if line.startswith(("ATOM", "HETATM")) and len(line) > 21:
+                ch = line[21]
+                if ch not in seen:
+                    seen.add(ch)
+                    chain_ids.append(ch)
     return chain_ids
 
 
 def _extract_atom_lines_by_partners(pdb_path, left_chains, right_chains):
-    """Extract ATOM lines for partner 0 (left) and partner 1 (right)."""
-    left_set = set(left_chains)
-    right_set = set(right_chains)
-    lines_0 = []
-    lines_1 = []
-    try:
-        with open(pdb_path, "r") as fh:
-            for line in fh:
-                if line.startswith("TER"):
-                    continue
-                if line.startswith("ATOM") or line.startswith("HETATM"):
-                    if len(line) >= 22:
-                        ch = line[21]
-                        if ch in left_set:
-                            lines_0.append(line)
-                        elif ch in right_set:
-                            lines_1.append(line)
-    except Exception as exc:
-        print(f"Could not read PDB {pdb_path}: {exc}")
+    left = set(left_chains); right = set(right_chains)
+    lines_0, lines_1 = [], []
+    with open(pdb_path) as fh:
+        for line in fh:
+            if not line.startswith(("ATOM", "HETATM")) or len(line) < 22:
+                continue
+            ch = line[21]
+            if ch in left:
+                lines_0.append(line)
+            elif ch in right:
+                lines_1.append(line)
     return lines_0, lines_1
-
-
-if __name__ == "__main__":
-    # Example: single structure with partners A_B
-    combined_path = "templates/pdbs/2ai9.pdb"
-    partner_chains = "A_B"
-    print("Run refinement via: refiner([(receptor.pdb, ligand.pdb), ...])")

@@ -1,11 +1,10 @@
 .pyc
 .DS_Store
 .vscode/
+assets/
 logs/
 templates/
-templates.zip
 processed/
-benchmark/data/
+benchmark/
 reference/
 __pycache__
-benchmark/prism_processed/prism_runs/

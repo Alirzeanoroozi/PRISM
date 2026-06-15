@@ -1,4 +1,0 @@
-set,total_models_scanned,predicted_models_matched_to_csv,unique_pdb1_pdb2_pairs_in_matched,pairs_with_different_templates,models_in_pairs_with_different_templates
-rigid,572,371,108,55,292
-medium,572,134,34,18,117
-difficult,572,67,17,8,56

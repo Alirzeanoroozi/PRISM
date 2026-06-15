@@ -1,3 +1,4 @@
+import csv
 import json
 import os
 import re
@@ -6,7 +7,11 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+import pandas as pd
 from Bio.PDB import PDBParser
+
+from .alignment import check_alignment_passes_thresholds
+
 
 def align_gtalign(
     queries,
@@ -18,12 +23,7 @@ def align_gtalign(
     speed=0,
     refinement=3,
 ):
-    """
-    GTalign-backed alignment stage that writes PRISM-compatible JSONs.
-
-    This is a separate implementation to keep the original TMalign pipeline
-    intact. Downstream stages can read the generated JSONs from output_dir.
-    """
+    """GTalign-backed alignment stage producing PRISM-compatible JSONs and per-target CSVs."""
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -31,11 +31,13 @@ def align_gtalign(
     selected_ref_paths = {}
 
     for protein in queries:
-        qpath = Path(f"processed/surface_extraction/{protein}.asa.pdb")
-        if qpath.exists():
-            selected_query_paths[protein] = qpath.resolve()
+        for cand in (Path(f"processed/surface_extraction/{protein}.asa.pdb"),
+                    Path(f"processed/surface_extraction/{protein}_asa.pdb")):
+            if cand.exists():
+                selected_query_paths[protein] = cand.resolve()
+                break
         else:
-            print(f"Missing query surface file: {qpath}")
+            print(f"Missing query surface file for {protein}")
 
     for template in templates:
         for chain in template[4:]:
@@ -49,6 +51,7 @@ def align_gtalign(
         raise RuntimeError("GTalign alignment stage: no valid query/reference files found.")
 
     parsed_pairs = set()
+    rows = []
     with tempfile.TemporaryDirectory(prefix="gtalign_prism_stage_", dir="processed") as td:
         td = Path(td)
         qdir = td / "queries"
@@ -122,35 +125,55 @@ def align_gtalign(
                 tm_candidates = [v for v in (hit["tm_ref"], hit["tm_query"]) if isinstance(v, (float, int))]
                 tm_score = max(tm_candidates) if tm_candidates else 0.0
                 match_count = hit["aligned_length"] or len(match_dict)
+                interface_residues = _count_ca(interface_path)
+                target_residues = _count_ca(protein_path)
+                translation = hit["translation"] or [0.0, 0.0, 0.0]
+                rotation = hit["rotation_mat"] or [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
                 write_alignment_json(
-                    output_dir,
-                    protein,
-                    template,
-                    chain,
-                    match_count,
-                    hit["translation"],
-                    hit["rotation_mat"],
-                    match_dict,
-                    tm_score,
+                    output_dir, protein, template, chain,
+                    match_count, translation, rotation, match_dict, tm_score,
                 )
+                rows.append({
+                    "protein": protein,
+                    "template": template,
+                    "chain": chain,
+                    "match_count": int(match_count),
+                    "tm_score": float(tm_score),
+                    "len_target": target_residues,
+                    "len_template": interface_residues,
+                    "translation": json.dumps(translation),
+                    "rotation_mat": json.dumps(rotation),
+                })
                 parsed_pairs.add((protein, template, chain))
 
-    # Preserve PRISM downstream expectations: one JSON per pair.
-    for protein in queries:
-        for template in templates:
-            for chain in template[4:]:
-                if (protein, template, chain) not in parsed_pairs:
-                    write_alignment_json(
-                        output_dir,
-                        protein,
-                        template,
-                        chain,
-                        0,
-                        [0.0, 0.0, 0.0],
-                        [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
-                        {},
-                        0.0,
-                    )
+    rows_by_target = {}
+    for row in rows:
+        if check_alignment_passes_thresholds(row):
+            rows_by_target.setdefault(row["protein"], []).append(row)
+
+    fieldnames = ["protein", "template", "chain", "match_count", "tm_score",
+                 "len_target", "len_template", "translation", "rotation_mat"]
+    for target, target_rows in rows_by_target.items():
+        out_csv = Path("processed/alignment") / f"{target}.csv"
+        out_csv.parent.mkdir(parents=True, exist_ok=True)
+        with open(out_csv, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(target_rows)
+        df = pd.read_csv(out_csv).sort_values("tm_score", ascending=False)
+        df.to_csv(out_csv, index=False)
+        print(f"Wrote {len(target_rows)} alignments to {out_csv}")
+
+
+def _count_ca(path):
+    if not os.path.exists(path):
+        return 0
+    n = 0
+    with open(path) as fh:
+        for line in fh:
+            if line.startswith("ATOM") and " CA " in line[:20]:
+                n += 1
+    return n
 
 
 def build_match_dict_from_aligned_sequences(query_seq, ref_seq, protein_path, interface_path):

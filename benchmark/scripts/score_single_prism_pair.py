@@ -52,21 +52,42 @@ def maybe_float(value):
 
 
 def infer_chain_order(pdb_path):
-    chains = []
+    """Return (receptor_chains, ligand_chains) inferred from chain order.
+
+    For a 2-chain PDB returns single-character chain ids. For >2 chains the
+    structure is split on TER markers (or evenly when none are present), so
+    multi-chain receptor/ligand inputs are supported.
+    """
+    groups = [[]]
     seen = set()
     with open(pdb_path) as handle:
         for line in handle:
+            if line.startswith("TER") and groups[-1]:
+                groups.append([])
+                continue
             if not line.startswith(("ATOM", "HETATM")):
                 continue
             chain_id = line[21].strip() or "_"
-            if chain_id not in seen:
-                seen.add(chain_id)
-                chains.append(chain_id)
-    if len(chains) != 2:
-        raise ValueError(
-            f"Automatic chain inference requires exactly 2 chains in {pdb_path}, found {len(chains)}: {chains}"
-        )
-    return chains[0], chains[1]
+            if chain_id in seen:
+                continue
+            seen.add(chain_id)
+            groups[-1].append(chain_id)
+
+    groups = [g for g in groups if g]
+    if len(groups) >= 2:
+        receptor = "".join(groups[0])
+        ligand = "".join(c for g in groups[1:] for c in g)
+        return receptor, ligand
+
+    chains = groups[0] if groups else []
+    if len(chains) == 2:
+        return chains[0], chains[1]
+    if len(chains) > 2:
+        half = len(chains) // 2
+        return "".join(chains[:half]), "".join(chains[half:])
+    raise ValueError(
+        f"Could not infer receptor/ligand chains for {pdb_path}; found chains {chains}"
+    )
 
 
 def resolve_model_inputs(path_arg):
@@ -98,10 +119,12 @@ def score_one(
     native_receptor=None,
     native_ligand=None,
 ):
-    model_receptor = model_receptor or infer_chain_order(model_pdb)[0]
-    model_ligand = model_ligand or infer_chain_order(model_pdb)[1]
-    native_receptor = native_receptor or infer_chain_order(native_pdb)[0]
-    native_ligand = native_ligand or infer_chain_order(native_pdb)[1]
+    model_chains = infer_chain_order(model_pdb)
+    native_chains = infer_chain_order(native_pdb)
+    model_receptor = model_receptor or model_chains[0]
+    model_ligand = model_ligand or model_chains[1]
+    native_receptor = native_receptor or native_chains[0]
+    native_ligand = native_ligand or native_chains[1]
 
     repo_root = Path.cwd()
     irmsd_script = repo_root / "benchmark/scripts/irmsd.py"
