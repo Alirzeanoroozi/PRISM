@@ -5,6 +5,4 @@ assets/
 logs/
 templates/
 processed/
-benchmark/
-reference/
 __pycache__

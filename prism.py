@@ -1,6 +1,6 @@
 import argparse
 from src.pdb_download import pdb_downloader
-from src.analyse_pdbs import run_analysis
+from src.eda.analyse_pdbs import run_analysis
 from src.template_generate import template_generator
 from src.surface_extract import extract_surfaces
 from src.alignment import align

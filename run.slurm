@@ -15,6 +15,5 @@ source ${CONDA_BASE}/bin/activate new_bg
 export LD_LIBRARY_PATH=${CONDA_BASE}/lib
 
 # python -u prism.py --inputs_csv inputs.csv --template_limit 0
-# echo "Done"
 
 python -u compare_outputs.py --output-dir processed/output --jobs ${SLURM_CPUS_PER_TASK:-24}
