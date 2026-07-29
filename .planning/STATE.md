@@ -13,8 +13,8 @@ scientifically.
 
 Phase: 1 of 5 (Run Identity and Manifest)
 Plan: 0 of 0 in current phase
-Status: Context captured; ready to plan
-Last activity: 2026-07-29 — Phase 1 context and discussion log captured
+Status: Domain model refined; ready to plan
+Last activity: 2026-07-29 — Phase 1 grilling decisions and ADRs captured
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -65,5 +65,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-07-29
-Stopped at: Phase 1 context captured; ready for plan-phase 1.
+Stopped at: Phase 1 domain model refined; ready for plan-phase 1.
 Resume file: None
