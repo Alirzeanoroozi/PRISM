@@ -1,4 +1,8 @@
 import argparse
+import json
+import os
+from datetime import datetime, timezone
+from pathlib import Path
 from src.pdb_download import pdb_downloader
 from src.eda.analyse_pdbs import run_analysis
 from src.template_generate import template_generator
@@ -9,9 +13,62 @@ from src.transformation import transformer
 from src.rosetta_refinement import refiner
 from src.compare import compare_and_summarize
 
+
+def parse_bool(value):
+    if isinstance(value, bool):
+        return value
+    normalized = str(value).strip().lower()
+    if normalized in {"true", "1", "yes", "y", "on"}:
+        return True
+    if normalized in {"false", "0", "no", "n", "off"}:
+        return False
+    raise argparse.ArgumentTypeError(f"invalid boolean value: {value}")
+
+
+def record_stage_event(stage, event, return_code=None, detail=""):
+    """Append an event only when PRISM_STAGE_STATUS_PATH is configured."""
+    raw_path = os.environ.get("PRISM_STAGE_STATUS_PATH")
+    if not raw_path:
+        return
+    record = {
+        "stage": stage,
+        "event": event,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "detail": detail,
+    }
+    if return_code is not None:
+        record["return_code"] = return_code
+    path = Path(raw_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, sort_keys=True) + "\n")
+
+
+def run_stage(stage, operation):
+    record_stage_event(stage, "started")
+    try:
+        result = operation()
+    except Exception as exc:
+        record_stage_event(stage, "failed", 1, f"{type(exc).__name__}: {exc}")
+        raise
+    record_stage_event(stage, "completed", 0)
+    return result
+
+
+def _select_baseline_top_k(candidates, top_k):
+    """Keep transformer score order within each receptor-ligand group."""
+    selected = []
+    counts = {}
+    for candidate in candidates:
+        key = (candidate[0], candidate[1])
+        if counts.get(key, 0) < top_k:
+            selected.append(candidate)
+            counts[key] = counts.get(key, 0) + 1
+    return selected
+
 def main(args):
     print("[1/6] PDB download")
-    receptor_targets, ligand_targets = pdb_downloader(args)
+    receptor_targets, ligand_targets = run_stage("input", lambda: pdb_downloader(args))
     targets = sorted(set(receptor_targets + ligand_targets))
     for r, l in zip(receptor_targets, ligand_targets):
         print(f"  {r} -> {l}")
@@ -40,15 +97,47 @@ def main(args):
 
     print(f"[4/6] Structural alignment ({args.aligner})")
     if args.aligner == "tmalign":
-        align(targets, templates)
+        run_stage("alignment", lambda: align(targets, templates))
     else:
-        align_gtalign(targets, templates, gtalign_path=args.gtalign_path)
+        run_stage("alignment", lambda: align_gtalign(
+            targets,
+            templates,
+            gtalign_path=args.gtalign_path,
+            dev_min_length=args.gtalign_dev_min_length,
+            pre_score=args.gtalign_pre_score,
+            speed=args.gtalign_speed,
+            refinement=args.gtalign_refinement,
+        ))
 
     print("[5/6] Transformation + filtering")
-    passed = transformer(receptor_targets, ligand_targets)
+    passed = run_stage(
+        "transformation",
+        lambda: transformer(receptor_targets, ligand_targets, return_all=args.rank),
+    )
     print(f"  accepted {len(passed)} receptor-ligand candidates")
     for receptor, ligand, template, output in passed:
         print(f"  {receptor} + {ligand} via {template} -> {output}")
+
+    if args.rank:
+        if args.top_k < 1:
+            raise ValueError("--top-k must be positive when --rank is enabled")
+        print(f"[5a/6] Candidate ranking ({args.rank_method})")
+        if args.rank_method == "baseline":
+            passed = run_stage("ranking", lambda: _select_baseline_top_k(passed, args.top_k))
+        else:
+            from src.prodigy_ranker import select_top_candidates
+
+            passed = run_stage("ranking", lambda: select_top_candidates(
+                passed,
+                top_k=args.top_k,
+                executable=args.prodigy_executable,
+                output_dir=args.prodigy_output_dir,
+                distance_cutoff=args.prodigy_distance_cutoff,
+                acc_threshold=args.prodigy_acc_threshold,
+                temperature=args.prodigy_temperature,
+                timeout=args.prodigy_timeout,
+            ))
+        print(f"  selected {len(passed)} candidate(s)")
 
     compare_pairs = list(passed)
     if args.refine and passed:
@@ -80,12 +169,16 @@ def main(args):
     else:
         print("  no accepted outputs to compare")
 
-if __name__ == "__main__":
+def build_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("--inputs_csv", type=str, default="inputs.csv")
     parser.add_argument("--generate_templates", action="store_true", help="Run template analysis & artifact generation before alignment.")
     parser.add_argument("--aligner", choices=["tmalign", "gtalign"], default="tmalign")
     parser.add_argument("--gtalign_path", default="gtalign")
+    parser.add_argument("--gtalign-dev-min-length", type=int, default=3)
+    parser.add_argument("--gtalign-pre-score", type=float, default=0.0)
+    parser.add_argument("--gtalign-speed", type=int, default=0)
+    parser.add_argument("--gtalign-refinement", type=int, default=3)
     parser.add_argument("--template_limit", type=int, default=100, help="Limit number of templates aligned (0 = all)")
     parser.add_argument("--refine", action="store_true", help="Run Rosetta refinement on accepted candidates")
     parser.add_argument(
@@ -99,5 +192,17 @@ if __name__ == "__main__":
         default=1,
         help="Parallel workers for final compare/DockQ step",
     )
-    args = parser.parse_args()
-    main(args)
+    parser.add_argument("--rank", type=parse_bool, default=False)
+    parser.add_argument("--top-k", type=int, default=5)
+    parser.add_argument("--rank-method", choices=["baseline", "prodigy"], default="baseline")
+    parser.add_argument("--prodigy-executable", default="prodigy")
+    parser.add_argument("--prodigy-output-dir", default="processed/ranking/prodigy")
+    parser.add_argument("--prodigy-distance-cutoff", type=float, default=5.5)
+    parser.add_argument("--prodigy-acc-threshold", type=float, default=0.05)
+    parser.add_argument("--prodigy-temperature", type=float, default=25.0)
+    parser.add_argument("--prodigy-timeout", type=float, default=120.0)
+    return parser
+
+
+if __name__ == "__main__":
+    main(build_parser().parse_args())

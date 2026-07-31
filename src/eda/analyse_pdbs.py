@@ -2,8 +2,8 @@ import os
 import pandas as pd
 from Bio.PDB import PDBParser
 
-from .pdb_download import download_pdb_file
-from .utils import STANDARD_AA
+from src.pdb_download import download_pdb_file
+from src.utils import STANDARD_AA
 
 TEMPLATES_PDBS_DIR = "templates/pdbs"
 os.makedirs(TEMPLATES_PDBS_DIR, exist_ok=True)
@@ -111,4 +111,3 @@ if __name__ == "__main__":
     print(f"Analysed {len(results)} template files.")
     print(f"Filtered {filtered_count} templates")
     print(f"Failed {failed_count} templates")
-

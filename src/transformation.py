@@ -35,14 +35,16 @@ MIN_HOTSPOT_MATCH = 1
 MIN_CONTACT_MATCH = 1
 
 
-def transformer(receptor_targets, ligand_targets):
-    """Return list of `(receptor, ligand, template, output_pdb)` for accepted pairs."""
+def transformer(receptor_targets, ligand_targets, return_all=False):
+    """Return accepted merged candidates, preserving the legacy best-only default."""
     accepted = []
     for receptor, ligand in zip(receptor_targets, ligand_targets):
         candidates = process_pair_for_template(receptor, ligand)
-        if candidates:
-            best = candidates[0]
-            accepted.append((receptor, ligand, best["template"], best["output_pdb"]))
+        selected = candidates if return_all else candidates[:1]
+        accepted.extend(
+            (receptor, ligand, candidate["template"], candidate["output_pdb"])
+            for candidate in selected
+        )
     return accepted
 
 
