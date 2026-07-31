@@ -67,6 +67,8 @@ def _select_baseline_top_k(candidates, top_k):
     return selected
 
 def main(args):
+    if args.surface_backend != "freesasa":
+        raise ValueError(f"Unsupported surface backend: {args.surface_backend}")
     print("[1/6] PDB download")
     receptor_targets, ligand_targets = run_stage("input", lambda: pdb_downloader(args))
     targets = sorted(set(receptor_targets + ligand_targets))
@@ -98,7 +100,7 @@ def main(args):
     print(f"[4/6] Structural alignment ({args.aligner})")
     if args.aligner == "tmalign":
         run_stage("alignment", lambda: align(targets, templates))
-    else:
+    elif args.aligner == "gtalign":
         run_stage("alignment", lambda: align_gtalign(
             targets,
             templates,
@@ -107,6 +109,16 @@ def main(args):
             pre_score=args.gtalign_pre_score,
             speed=args.gtalign_speed,
             refinement=args.gtalign_refinement,
+        ))
+    else:
+        os.environ["PRISM_MULTIPROT"] = args.multiprot_path
+        from src.alignment_multiprot import align_multiprot
+
+        run_stage("alignment", lambda: align_multiprot(
+            targets,
+            templates,
+            output_dir="processed/alignment",
+            max_workers=args.multiprot_workers,
         ))
 
     print("[5/6] Transformation + filtering")
@@ -141,15 +153,29 @@ def main(args):
 
     compare_pairs = list(passed)
     if args.refine and passed:
-        print("[6a/6] Rosetta refinement")
-        refined = refiner(passed)
-        for rec, lig, isc, tsc, op in refined:
-            print(f"  refined {rec} + {lig}: int={isc} total={tsc} -> {op}")
-        if refined:
-            compare_pairs = [
-                (rec, lig, tpl, out_pdb)
-                for (rec, lig, tpl, _), (_, _, _, _, out_pdb) in zip(passed, refined)
-            ]
+        print(f"[6a/6] {args.refiner} refinement")
+        if args.refiner == "external_rosetta":
+            refined = run_stage("refinement", lambda: refiner(passed))
+            for rec, lig, isc, tsc, op in refined:
+                print(f"  refined {rec} + {lig}: int={isc} total={tsc} -> {op}")
+            if refined:
+                compare_pairs = [
+                    (rec, lig, tpl, out_pdb)
+                    for (rec, lig, tpl, _), (_, _, _, _, out_pdb) in zip(passed, refined)
+                ]
+        elif args.refiner == "pyrosetta":
+            from src.pyrosetta_refinement import refine_merged_candidates
+
+            compare_pairs = run_stage("refinement", lambda: refine_merged_candidates(
+                passed,
+                output_root=args.pyrosetta_output_dir,
+                init_options=args.pyrosetta_init_options,
+            ))
+        else:
+            os.environ["PRISM_FIBERDOCK_DIR"] = args.fiberdock_dir
+            from src.fiberdock_refinement import refine_merged_candidates
+
+            compare_pairs = run_stage("refinement", lambda: refine_merged_candidates(passed))
 
     print("[6/6] Compare outputs vs native + DockQ")
     if compare_pairs:
@@ -173,14 +199,39 @@ def build_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("--inputs_csv", type=str, default="inputs.csv")
     parser.add_argument("--generate_templates", action="store_true", help="Run template analysis & artifact generation before alignment.")
-    parser.add_argument("--aligner", choices=["tmalign", "gtalign"], default="tmalign")
+    parser.add_argument("--aligner", choices=["tmalign", "gtalign", "multiprot"], default="tmalign")
     parser.add_argument("--gtalign_path", default="gtalign")
     parser.add_argument("--gtalign-dev-min-length", type=int, default=3)
     parser.add_argument("--gtalign-pre-score", type=float, default=0.0)
     parser.add_argument("--gtalign-speed", type=int, default=0)
     parser.add_argument("--gtalign-refinement", type=int, default=3)
+    parser.add_argument("--multiprot-workers", type=int, default=8)
+    parser.add_argument(
+        "--multiprot-path",
+        default=os.environ.get("PRISM_MULTIPROT", "external_tools/multiprot.Linux"),
+    )
+    parser.add_argument(
+        "--surface-backend",
+        choices=["freesasa"],
+        default="freesasa",
+        help="Surface backend used by this PRISM implementation.",
+    )
     parser.add_argument("--template_limit", type=int, default=100, help="Limit number of templates aligned (0 = all)")
     parser.add_argument("--refine", action="store_true", help="Run Rosetta refinement on accepted candidates")
+    parser.add_argument(
+        "--refiner",
+        choices=["external_rosetta", "pyrosetta", "fiberdock"],
+        default="external_rosetta",
+    )
+    parser.add_argument("--pyrosetta-output-dir", default="processed/pyrosetta_refinement")
+    parser.add_argument(
+        "--pyrosetta-init-options",
+        default="-mute all -constant_seed -jran 12345",
+    )
+    parser.add_argument(
+        "--fiberdock-dir",
+        default=os.environ.get("PRISM_FIBERDOCK_DIR", "external_tools/fiberdock"),
+    )
     parser.add_argument(
         "--dockq-no-align",
         action="store_true",
