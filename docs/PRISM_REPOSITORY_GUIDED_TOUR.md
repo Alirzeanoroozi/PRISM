@@ -18,6 +18,12 @@ as equivalent or better without matched validation.
 
 ## Choose a tour length
 
+For the live retained-evidence segment, use the dedicated
+[two-orientation PRODIGY showcase](PRISM_SHOWCASE_TEST_CASE.md). It provides a
+verified `5zngA / 4eylA` case in which two candidates score successfully and
+top-1 ranking forwards orientation `o1`, together with exact assertions and
+the limits of the resulting claim.
+
 ### 15-minute orientation
 
 1. Show the repository landmarks and `python prism.py --help`.
