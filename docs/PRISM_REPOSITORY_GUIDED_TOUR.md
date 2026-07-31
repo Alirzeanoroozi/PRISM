@@ -413,6 +413,37 @@ a previously recorded result rather than spending the session waiting.
 | DockQ fails or scores few rows | Are model/native hashes and chain mappings complete? | Inspect raw evaluator errors and denominator audit; do not silently drop rows. |
 | Files exist after a failed job | Is there a normal return and terminal record? | Treat them as partial artifacts until the evidence contract says otherwise. |
 
+## Presenter run-of-show card
+
+Use this as the one-page control sheet while presenting:
+
+- [ ] State the scientific question and stable reference stack.
+- [ ] Run only `prism.py --help` and source-inspection commands live.
+- [ ] Trace one pair through input, surface, alignment, transformation,
+      ranking (optional), refinement, and evaluation.
+- [ ] At each stage, name the function, tool, input, output, and failure record.
+- [ ] Show one retained stage-status row and one candidate-audit row.
+- [ ] Ask whether the evidence proves mechanical completion, biological
+      quality, both, or neither.
+- [ ] Label GTalign, MultiProt, FreeSASA, PyRosetta, FiberDock, baseline
+      ranking, PRODIGY, comparison, and provenance by their actual maturity.
+- [ ] Mention the stale DockQ interpreter documentation and MultiProt
+      source/test drift before showing validation results.
+- [ ] Finish with the lineage exercise and invite a participant to restate the
+      evidence order without looking at the guide.
+
+Participant worksheet:
+
+| Stage | Function/module | External tool | Input identity | Output/evidence | What could make it untrustworthy? |
+| --- | --- | --- | --- | --- | --- |
+| Input |  |  |  |  |  |
+| Surface |  |  |  |  |  |
+| Alignment |  |  |  |  |  |
+| Transformation |  |  |  |  |  |
+| Ranking |  |  |  |  |  |
+| Refinement |  |  |  |  |  |
+| Evaluation |  |  |  |  |  |
+
 ## Socratic learning checkpoints
 
 Pause after each checkpoint and ask one participant to explain the answer in
