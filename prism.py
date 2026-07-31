@@ -1,4 +1,9 @@
 import argparse
+import json
+import os
+import time
+from datetime import datetime, timezone
+from pathlib import Path
 
 from src.pdb_download import pdb_downloader
 from src.analyse_pdbs import run_analysis
@@ -6,13 +11,63 @@ from src.template_generate import template_generator
 from src.surface_extract import extract_surfaces
 from src.alignment import align
 from src.alignment_gtalign import align_gtalign
+from src.alignment_multiprot import align_multiprot
 from src.transformation import transformer
 from src.rosetta_refinement import refiner
+from src.pyrosetta_refinement import refine_pairs as pyrosetta_refiner
+from src.fiberdock_refinement import refine_pairs as fiberdock_refiner
+from src.compare import compare_pairs_from_outputs
+from src.candidate_selector import select_top_candidates
+
+
+def parse_bool(value):
+    """Parse CLI booleans without Python's bool('false') trap."""
+    if isinstance(value, bool):
+        return value
+    normalized = str(value).strip().lower()
+    if normalized in {"true", "1", "yes", "y", "on"}:
+        return True
+    if normalized in {"false", "0", "no", "n", "off"}:
+        return False
+    raise argparse.ArgumentTypeError(f"invalid boolean value: {value}")
+
+
+def record_stage_event(stage, event, return_code=None, detail=""):
+    """Append an opt-in, machine-readable pipeline stage event."""
+    raw_path = os.environ.get("PRISM_STAGE_STATUS_PATH")
+    if not raw_path:
+        return
+    record = {
+        "stage": stage,
+        "event": event,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "detail": detail,
+    }
+    if return_code is not None:
+        record["return_code"] = return_code
+    path = Path(raw_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, sort_keys=True) + "\n")
+
+
+def run_stage(stage, operation):
+    record_stage_event(stage, "started")
+    try:
+        result = operation()
+    except Exception as exc:
+        record_stage_event(stage, "failed", return_code=1, detail=f"{type(exc).__name__}: {exc}")
+        raise
+    record_stage_event(stage, "completed", return_code=0)
+    return result
 
 def main(args):
+    os.environ["PRISM_SURFACE_BACKEND"] = args.surface_backend
+    if args.freesasa_python:
+        os.environ["PRISM_FREESASA_PYTHON"] = args.freesasa_python
     alignment_output_dir = "processed/alignment"
     print("PDB download stage started...")
-    receptor_targets, ligand_targets = pdb_downloader()
+    receptor_targets, ligand_targets = run_stage("input", pdb_downloader)
     targets = receptor_targets + ligand_targets
     for r, l in zip(receptor_targets, ligand_targets):
         print(r, "->", l)
@@ -33,6 +88,10 @@ def main(args):
     else:
         with open("templates/calculated_templates.txt", "r") as f:
             templates = [line.strip() for line in f.readlines()]
+        if args.template_limit is not None:
+            if args.template_limit <= 0:
+                raise ValueError("--template-limit must be positive")
+            templates = templates[:args.template_limit]
         print("Templates loaded, templates length", len(templates))
 
     print("Surface extraction stage started...")
@@ -40,43 +99,227 @@ def main(args):
     print("Surface extraction stage finished...")
 
     print("Structural alignment stage started...")
-    # Local change: optional backend switch; default remains original TMalign pipeline.
     if args.aligner == "tmalign":
-        align(targets, templates)
-    else:
-        alignment_output_dir = "processed/alignment_gtalign"
-        align_gtalign(
-            targets,
-            templates,
-            gtalign_path=args.gtalign_path,
+        run_stage("alignment", lambda: align(targets, templates))
+        alignment_output_dir = "processed/alignment"
+    elif args.aligner == "multiprot":
+        run_stage("alignment", lambda: align_multiprot(
+            targets, templates,
             output_dir=alignment_output_dir,
-            dev_min_length=args.gtalign_dev_min_length,
-            pre_score=args.gtalign_pre_score,
-            speed=args.gtalign_speed,
-            refinement=args.gtalign_refinement,
+            max_workers=int(os.environ.get("PRISM_MULTIPROT_WORKERS", "8")),
+        ))
+        alignment_output_dir = "processed/alignment"
+    else:
+        run_id = os.environ.get("PRISM_RUN_ID") or f"{time.strftime('%Y%m%d%H%M%S')}-{os.getpid()}"
+        alignment_output_dir = os.path.join("processed", "alignment_gtalign", run_id)
+        run_stage(
+            "alignment",
+            lambda: align_gtalign(
+                targets,
+                templates,
+                gtalign_path=args.gtalign_path,
+                output_dir=alignment_output_dir,
+                dev_min_length=args.gtalign_dev_min_length,
+                pre_score=args.gtalign_pre_score,
+                speed=args.gtalign_speed,
+                refinement=args.gtalign_refinement,
+            ),
         )
+        # For GTalign, also symlink to standard alignment dir for transformer compatibility
+        standard_alignment_dir = "processed/alignment"
+        if os.path.exists(standard_alignment_dir):
+            import shutil
+            shutil.rmtree(standard_alignment_dir)
+        os.symlink(alignment_output_dir, standard_alignment_dir)
     print("Structural alignment stage finished...")
 
+    rank_enabled = getattr(args, "rank", False)
+    if rank_enabled and args.top_k < 1:
+        raise ValueError("--top-k must be positive when --rank is enabled")
+    audit_path = getattr(args, "candidate_audit_path", None) or os.environ.get("PRISM_CANDIDATE_AUDIT_PATH")
+    if rank_enabled and not audit_path:
+        run_id = os.environ.get("PRISM_RUN_ID") or f"{time.strftime('%Y%m%d%H%M%S')}-{os.getpid()}"
+        audit_path = os.path.join("processed", "candidate_audit", f"{run_id}.jsonl")
+
     print("Transformation filtering stage started...")
-    passed_pairs = transformer(templates, alignment_dir=alignment_output_dir)
+    transform_operation = lambda: transformer(templates, alignment_dir=alignment_output_dir)
+    if audit_path:
+        transform_operation = lambda: transformer(
+            templates, alignment_dir=alignment_output_dir, audit_path=audit_path,
+        )
+    passed_pairs = run_stage("transformation", transform_operation)
     print("Passed pairs", len(passed_pairs))
     for pair in passed_pairs:
         print(pair)
     print("Transformation filtering stage finished...")
 
-    print("Rosetta refinement stage started...")
-    refiner(passed_pairs)
-    print("Rosetta refinement stage finished...")
+    # Optional ranking stage: select top-K candidates per pair before refinement
+    if rank_enabled:
+        print("Candidate ranking stage started...")
+        print(f"  Candidate audit: {audit_path}")
+        rank_method = getattr(args, "rank_method", "baseline")
+        print(f"  Ranking method: {rank_method}")
+        passed_pairs = run_stage(
+            "ranking",
+            lambda: select_top_candidates(
+                passed_pairs,
+                audit_path=audit_path,
+                top_k=args.top_k,
+                min_score=args.rank_min_score,
+                rank_method=rank_method,
+                prodigy_executable=getattr(args, "prodigy_executable", "prodigy"),
+                prodigy_output_dir=getattr(args, "prodigy_output_dir", "processed/ranking/prodigy"),
+                prodigy_distance_cutoff=getattr(args, "prodigy_distance_cutoff", 5.5),
+                prodigy_acc_threshold=getattr(args, "prodigy_acc_threshold", 0.05),
+                prodigy_temperature=getattr(args, "prodigy_temperature", 25.0),
+                prodigy_timeout=getattr(args, "prodigy_timeout", 120.0),
+            ),
+        )
+        print(f"  Selected {len(passed_pairs)} pairs after ranking (top {args.top_k} per receptor-ligand)")
+        print("Candidate ranking stage finished...")
+
+    print(f"{args.refiner} refinement stage started...")
+    if args.refiner == "external_rosetta":
+        run_stage("refinement", lambda: refiner(passed_pairs))
+    elif args.refiner == "pyrosetta":
+        run_stage("refinement", lambda: pyrosetta_refiner(passed_pairs))
+    elif args.refiner == "fiberdock":
+        run_stage("refinement", lambda: fiberdock_refiner(passed_pairs))
+    else:
+        raise ValueError(f"Unknown refiner: {args.refiner}")
+    print(f"{args.refiner} refinement stage finished...")
+
+    if getattr(args, "compare", False):
+        print("Compare (DockQ evaluation) stage started...")
+        summary_csv, rows = run_stage(
+            "compare",
+            lambda: compare_pairs_from_outputs(
+                passed_pairs,
+                dockq_no_align=args.dockq_no_align,
+                n_jobs=args.compare_jobs,
+            ),
+        )
+        print(f"  compared {len(rows)} pairs")
+        print(f"  summary written to {summary_csv}")
+        print("Compare (DockQ evaluation) stage finished...")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--generate_templates", type=bool, default=False)
+    parser.add_argument("--generate_templates", type=parse_bool, default=False)
     # Local change: keep TMalign as default; allow GTalign on user request.
-    parser.add_argument("--aligner", choices=["tmalign", "gtalign"], default="tmalign")
+    parser.add_argument("--aligner", choices=["tmalign", "gtalign", "multiprot"], default="tmalign")
+    parser.add_argument(
+        "--refiner",
+        choices=["external_rosetta", "pyrosetta", "fiberdock"],
+        default=os.environ.get("PRISM_REFINER", "external_rosetta"),
+        help="Final refinement backend; PyRosetta is explicit and never a fallback.",
+    )
+    parser.add_argument(
+        "--template-limit",
+        type=int,
+        default=None,
+        help="Bounded template panel for smoke tests; omit for the full manifest panel.",
+    )
+    parser.add_argument(
+        "--surface_backend",
+        choices=["naccess", "freesasa"],
+        default=os.environ.get("PRISM_SURFACE_BACKEND", "naccess"),
+        help="Surface-area backend; NACCESS remains the default.",
+    )
+    parser.add_argument(
+        "--freesasa_python",
+        type=str,
+        default=os.environ.get("PRISM_FREESASA_PYTHON"),
+        help="Python interpreter containing FreeSASA when --surface_backend=freesasa.",
+    )
     parser.add_argument("--gtalign_path", type=str, default="gtalign")
     parser.add_argument("--gtalign_dev_min_length", type=int, default=3)
     parser.add_argument("--gtalign_pre_score", type=float, default=0.0)
     parser.add_argument("--gtalign_speed", type=int, default=0)
     parser.add_argument("--gtalign_refinement", type=int, default=3)
+    parser.add_argument(
+        "--compare",
+        type=parse_bool,
+        default=os.environ.get("PRISM_COMPARE", "").lower() in ("true", "1", "yes"),
+        help="Run DockQ evaluation after refinement (opt-in).",
+    )
+    parser.add_argument(
+        "--dockq-no-align",
+        type=parse_bool,
+        default=False,
+        help="Skip superposition before DockQ calculation.",
+    )
+    parser.add_argument(
+        "--compare-jobs",
+        type=int,
+        default=int(os.environ.get("PRISM_COMPARE_JOBS", "1")),
+        help="Parallel workers for DockQ comparison.",
+    )
+    parser.add_argument(
+        "--rank",
+        type=parse_bool,
+        default=os.environ.get("PRISM_RANK", "").lower() in ("true", "1", "yes"),
+        help="Enable candidate ranking before refinement (opt-in).",
+    )
+    parser.add_argument(
+        "--top-k",
+        type=int,
+        default=int(os.environ.get("PRISM_TOP_K", "5")),
+        help="Maximum candidates to keep per receptor-ligand pair after ranking.",
+    )
+    parser.add_argument(
+        "--rank-min-score",
+        type=float,
+        default=float(os.environ.get("PRISM_RANK_MIN_SCORE", "0.0")),
+        help="Minimum baseline score threshold for ranking (0-1).",
+    )
+    parser.add_argument(
+        "--rank-method",
+        choices=["baseline", "prodigy"],
+        default=os.environ.get("PRISM_RANK_METHOD", "baseline"),
+        help="Candidate ranking scorer. PRODIGY is opt-in and requires a separate installed executable.",
+    )
+    parser.add_argument(
+        "--prodigy-executable",
+        type=str,
+        default=os.environ.get("PRISM_PRODIGY_EXECUTABLE", "prodigy"),
+        help="PRODIGY command or executable path used with --rank-method prodigy.",
+    )
+    parser.add_argument(
+        "--prodigy-output-dir",
+        type=str,
+        default=os.environ.get("PRISM_PRODIGY_OUTPUT_DIR", "processed/ranking/prodigy"),
+        help="Directory for combined PRODIGY inputs, stdout/stderr, and score metadata.",
+    )
+    parser.add_argument(
+        "--prodigy-distance-cutoff",
+        type=float,
+        default=float(os.environ.get("PRISM_PRODIGY_DISTANCE_CUTOFF", "5.5")),
+        help="PRODIGY intermolecular contact distance cutoff in Angstroms.",
+    )
+    parser.add_argument(
+        "--prodigy-acc-threshold",
+        type=float,
+        default=float(os.environ.get("PRISM_PRODIGY_ACC_THRESHOLD", "0.05")),
+        help="PRODIGY accessibility threshold for interface analysis.",
+    )
+    parser.add_argument(
+        "--prodigy-temperature",
+        type=float,
+        default=float(os.environ.get("PRISM_PRODIGY_TEMPERATURE", "25.0")),
+        help="PRODIGY temperature in Celsius for the reported affinity model.",
+    )
+    parser.add_argument(
+        "--prodigy-timeout",
+        type=float,
+        default=float(os.environ.get("PRISM_PRODIGY_TIMEOUT", "120")),
+        help="Maximum seconds allowed for one PRODIGY candidate score.",
+    )
+    parser.add_argument(
+        "--candidate-audit-path",
+        type=str,
+        default=os.environ.get("PRISM_CANDIDATE_AUDIT_PATH"),
+        help="JSONL candidate audit path; ranked runs otherwise receive a fresh run-scoped path.",
+    )
     args = parser.parse_args()
     main(args)
