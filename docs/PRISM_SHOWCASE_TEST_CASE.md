@@ -7,6 +7,9 @@ candidate orientations. PRODIGY scores both candidates successfully, and the
 PRISM ranking adapter forwards the single candidate with the more favorable
 predicted affinity when `top_k=1`.
 
+Use the [verified CLI reference](PRISM_CLI_REFERENCE.md) for current option
+aliases, defaults, and backend runtime controls.
+
 It demonstrates:
 
 - candidate identity encoded in transformed filenames;
@@ -241,6 +244,7 @@ PRISM_INPUTS_CSV=<isolated-case-inputs.csv> \
 PRISM_PRODIGY_EXECUTABLE=<verified-prodigy-executable> \
 PRISM_STAGE_STATUS_PATH=<run-root>/stage-status.jsonl \
 /home/rshadi25/.conda/envs/gtalign_env/bin/python prism.py \
+  --inputs_csv <isolated-case-inputs.csv> \
   --template-limit 1 \
   --rank true \
   --rank-method prodigy \

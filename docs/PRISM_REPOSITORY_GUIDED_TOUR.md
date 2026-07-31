@@ -7,6 +7,9 @@ It explains what PRISM-prescript does, how a command moves through the code,
 which external tools perform the scientific work, and how to distinguish a
 created file from a validated result.
 
+For exact option spellings and defaults on the current compatibility branch,
+use the [verified CLI reference](PRISM_CLI_REFERENCE.md).
+
 The central question for the audience is:
 
 > If a docking result appears under `processed/`, what evidence tells us which
@@ -126,31 +129,32 @@ is one reason the current reliability work is not finished.
 | --- | --- | --- | --- | --- | --- |
 | `python prism.py --help` | Lists the current public CLI. | `prism.py`, parser block after `main()` | Python/argparse | Terminal help | Safe live demo. |
 | `python prism.py` | Runs the stable default orchestration. | `prism.py:main()` | NACCESS, TMalign, external Rosetta | `processed/*` | Heavy/network-capable; use Slurm or retained evidence. |
-| `PRISM_INPUTS_CSV=<csv>` | Selects the receptor–ligand table without editing `inputs.csv`. | `src/pdb_download.py:pdb_downloader()` and `src/transformation.py:transformer()` | pandas | Chain-qualified PDBs and pair loop | CSV requires `Receptor,Ligand`. |
-| `--generate_templates true` | Analyzes PDB templates and regenerates interface assets. | `src/analyse_pdbs.py:run_analysis()`; `src/template_generate.py:template_generator()` | NACCESS and template utilities | Template assets and `calculated_templates.txt` | Optional; not part of the bounded default smoke route. |
-| `--template-limit N` | Uses only the first N calculated templates. | `prism.py:main()` template-loading block | Python | Bounded downstream workload | Intended for smoke tests; N must be positive. |
-| `--surface_backend naccess` | Computes relative accessibility and CA surface scaffolds. | `src/surface_extract.py:extract_surfaces()`; `src/naccess_utils.py` | `external_tools/naccess/naccess` | `processed/surface_extraction/*.asa.pdb`; `failures.tsv` | Stable default. |
-| `--surface_backend freesasa --freesasa_python <python>` | Uses FreeSASA through a separate interpreter. | `src/naccess_utils.py`; `src/freesasa_runner.py` | FreeSASA | Same surface-stage contract | Explicit alternative; compare outputs before interpreting yield differences. |
+| `--inputs_csv <csv>` / `--inputs-csv <csv>` | Selects the receptor–ligand table for input download. | `prism.py:main()`; `src/pdb_download.py:pdb_downloader()` | pandas | Chain-qualified PDBs | CSV requires `Receptor,Ligand`. End-to-end propagation is incomplete: transformation still reads `PRISM_INPUTS_CSV`/`inputs.csv`; use the same absolute path in the environment and CLI. |
+| `--generate_templates` / `--generate-templates` | Analyzes PDB templates and regenerates interface assets; optional `true`/`false` values remain accepted. | `src/analyse_pdbs.py:run_analysis()`; `src/template_generate.py:template_generator()` | NACCESS and template utilities | Template assets and `calculated_templates.txt` | Optional; default is false. |
+| `--template-limit N` / `--template_limit N` | Uses only the first N calculated templates. | `prism.py:main()` template-loading block | Python | Bounded downstream workload | Intended for smoke tests; N must be positive. |
+| `--surface-backend naccess` / `--surface_backend naccess` | Computes relative accessibility and CA surface scaffolds. | `src/surface_extract.py:extract_surfaces()`; `src/naccess_utils.py` | `external_tools/naccess/naccess` | `processed/surface_extraction/*.asa.pdb`; `failures.tsv` | Stable default. |
+| `--surface-backend freesasa --freesasa-python <python>` | Uses FreeSASA through a separate interpreter; underscore aliases also work. | `src/naccess_utils.py`; `src/freesasa_runner.py` | FreeSASA | Same surface-stage contract | Explicit alternative; compare outputs before interpreting yield differences. |
 | `--aligner tmalign` | Aligns each query surface to template-interface chains. | `src/alignment.py:align()` and `parse_tmalign()` | `external_tools/TMalign` or `PRISM_TMALIGN` | `processed/alignment/*.json` | Stable default. |
-| `--aligner gtalign --gtalign_path <binary>` | Runs GTalign and parses hits into alignment records. | `src/alignment_gtalign.py:align_gtalign()` | GTalign CPU/GPU | `processed/alignment_gtalign/<run-id>/*.json` plus compatibility symlink | Opt-in; CPU/GPU divergence remains unresolved. Symlink statefulness is an open contract issue. |
-| `--aligner multiprot` | Runs MultiProt, extracts matches, calculates transforms and true TM-score. | `src/alignment_multiprot.py:align_multiprot()` | `external_tools/multiprot.Linux` | `processed/alignment/*.json` | Diagnostic/opt-in; short-fragment bias and legacy runtime equivalence remain open. |
+| `--aligner gtalign --gtalign-path <binary>` | Runs GTalign and parses hits into alignment records; GTalign controls accept hyphen and underscore aliases. | `src/alignment_gtalign.py:align_gtalign()` | GTalign CPU/GPU | `processed/alignment_gtalign/<run-id>/*.json` plus compatibility symlink | Opt-in; CPU/GPU divergence remains unresolved. Symlink statefulness is an open contract issue. |
+| `--aligner multiprot --multiprot-path <binary> --multiprot-workers N` | Runs MultiProt with call-time executable and worker controls, extracts matches, and calculates transforms/true TM-score. | `src/alignment_multiprot.py:align_multiprot()` | MultiProt | `processed/alignment/*.json` | Diagnostic/opt-in; short-fragment bias and legacy runtime equivalence remain open. |
 | transformation controls such as `PRISM_TM_SCORE_THRESHOLD` | Applies alignment-specific gates, transforms both partners, and rejects clashes. | `src/transformation.py:transformer()`, `alignment_score_passes()`, `alignment_passes_thresholds()`, `process_pair_for_template()` | NumPy/Biopython and template assets | `processed/transformation/*.pdb`; optional candidate-audit JSONL | Defaults are scientific baseline controls; diagnostic overrides are not production defaults. |
 | `PRISM_FILTER_MODE=published_protocol` | Enables protocol asset/hotspot filtering rather than geometry-only experimental mode. | `src/transformation.py`; `src/template_filtering.py` | contacts/hotspots/RSA assets | Candidate decisions in audit | Asset parity remains unresolved; label the mode clearly. |
 | `--rank true --top-k N` | Ranks accepted candidates before refinement. | `src/candidate_selector.py:select_top_candidates()`; `src/candidate_ranker.py` | Deterministic baseline | Run-scoped `processed/candidate_audit/*.jsonl`; reduced candidate list | Opt-in resource-reduction experiment, not proven quality improvement. |
 | `--rank true --rank-method prodigy --prodigy-executable <path>` | Scores transformed complexes by predicted affinity and keeps top candidates. | `src/prodigy_ranker.py`; called through `candidate_selector.py` | PRODIGY executable | `processed/ranking/prodigy/` inputs, stdout/stderr, JSON records | Opt-in and paired-smoke validated mechanically; independent biological evaluation remains open. |
-| `--refiner external_rosetta` | Pre-packs, docks, score-filters, and assembles candidate models. | `src/rosetta_refinement.py:refiner()` | Rosetta 2022.42 executables/database | `processed/rosetta_refinement/` | Stable default, but per-candidate return/score-gate observability is incomplete. |
-| `--refiner pyrosetta` | Refines candidates through the PyRosetta API. | `src/pyrosetta_refinement.py:refine_pairs()` | PyRosetta | `processed/pyrosetta_refinement/` | Explicit alternative; never an implicit fallback. |
-| `--refiner fiberdock` | Adds hydrogens, generates modes/parameters, runs FiberDock, and records energies. | `src/fiberdock_refinement.py:refine_pairs()` | Reduce, NMA, FiberDock, helper scripts | `processed/fiberdock_refinement/structures` and `energies` | Opt-in; historical equivalence and parser integration remain unresolved. |
-| `--compare true [--compare-jobs N]` | Scores refined outputs against native structures. | `src/compare.py:compare_pairs_from_outputs()`; `src/eval/` | DockQ and iRMSD code | `processed/summary.csv`; trimmed natives | Opt-in; mapping and hash identity matter more than filename presence. |
+| `--refine --refiner external_rosetta` | Pre-packs, docks, score-filters, and assembles candidate models. | `src/rosetta_refinement.py:refiner()` | Rosetta 2022.42 executables/database | `processed/rosetta_refinement/` | Refinement and external Rosetta are defaults; per-candidate return/score-gate observability is incomplete. |
+| `--no-refine` | Stops after transformation or optional ranking. | `prism.py:main()` refinement guard | Python | No new refinement outputs | Useful for diagnostics; avoid assuming `--no-refine --compare` has fresh scoreable models. |
+| `--refiner pyrosetta --pyrosetta-output-dir <dir> --pyrosetta-init-options='<options>'` | Refines candidates through the PyRosetta API with call-time output/init controls. | `src/pyrosetta_refinement.py:refine_pairs()` | PyRosetta | Configured output root | Explicit alternative; use `=` when the init value begins with `-`. |
+| `--refiner fiberdock --fiberdock-dir <dir>` | Configures helpers, runs FiberDock, and records structures/energies. | `src/fiberdock_refinement.py:refine_pairs()` | Reduce, NMA, FiberDock, helper scripts | `processed/fiberdock_refinement/` | Opt-in; historical equivalence remains unresolved. |
+| `--compare [true|false] [--compare-jobs N]` | Scores refined outputs against native structures; bare `--compare` means true. | `src/compare.py:compare_pairs_from_outputs()`; `src/eval/` | DockQ and iRMSD code | `processed/summary.csv`; trimmed natives | Opt-in; mapping and hash identity matter more than filename presence. |
 | `PRISM_STAGE_STATUS_PATH=<jsonl>` | Records stage start/completion/failure events. | `prism.py:record_stage_event()` and `run_stage()` | JSONL writer | User-selected JSONL | Useful evidence, but current lifecycle vocabulary/coverage is not yet the full Phase 2 contract. |
 | `python -m src.provenance.run_evidence --help` | Shows the Phase 1 contract/attempt/artifact-ledger CLI. | `src/provenance/run_evidence.py:main()` | Standard-library provenance module | Contract JSON, manifest JSON, ledger TSV, closeout/validation records | Ongoing Phase 1 work; do not present as accepted integration yet. |
 
-### Boolean CLI pitfall
+### Boolean CLI forms
 
-The boolean options use a custom `parse_bool()`. For clarity in a presentation,
-write explicit values such as `--rank true` and `--compare true`. The bare
-`--rank` spelling shown in some older documentation is not accepted by the
-current parser because the option expects a value.
+`--generate_templates`, `--compare`, and `--dockq-no-align` accept a bare flag
+as true or an explicit `true`/`false` value. `--rank` still requires an
+explicit boolean (`--rank true` or `--rank false`). Refinement uses the
+mutually exclusive `--refine` and `--no-refine` switches and defaults to on.
 
 ## Trace one pair through the source
 
