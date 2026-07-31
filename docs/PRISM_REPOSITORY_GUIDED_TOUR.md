@@ -10,6 +10,12 @@ created file from a validated result.
 For exact option spellings and defaults on the current compatibility branch,
 use the [verified CLI reference](PRISM_CLI_REFERENCE.md).
 
+For every class, method, public function, and private helper in the maintained
+entry point and `src/` tree, use the generated
+[function inventory](PRISM_FUNCTION_INVENTORY.md). The inventory is derived
+from the source AST so its file paths and line numbers can be refreshed instead
+of maintained as a second hand-written API list.
+
 The central question for the audience is:
 
 > If a docking result appears under `processed/`, what evidence tells us which
@@ -78,6 +84,8 @@ or a live Rosetta run during the presentation.
 | --- | --- | --- |
 | `prism.py` | User-facing CLI and stage orchestration. | `main()`, parser definitions, `run_stage()`. |
 | `src/` | Pipeline adapters, filters, transformations, refinement, evaluation, ranking, and provenance. | Follow the modules in the stage map below. |
+| `docs/PRISM_FUNCTION_INVENTORY.md` | Generated current-pipeline callable map. | Find a function by module, class, or line number. |
+| `tools/build_pipeline_function_inventory.py` | AST-based inventory generator. | Regenerate the function map after source changes. |
 | `templates/` / `new_template/template/` | Interface structures and derived template assets. | `pdbs`, `interfaces`, `interfaces_lists`, `contacts`, `hotspots`, `rsas`. |
 | `processed/` | Mutable runtime outputs, not proof of completion by itself. | Alignment JSON, transformed models, refinement folders. |
 | `benchmark/scripts/` | Reproducible launchers, scorers, audits, collectors, and diagnostics. | Stable smoke launcher and selected validators. |

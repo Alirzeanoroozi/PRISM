@@ -12,6 +12,15 @@ three different claims:
 Parser compatibility does not by itself establish end-to-end or scientific
 validation.
 
+For the complete maintained callable surface, see the generated
+[PRISM function inventory](PRISM_FUNCTION_INVENTORY.md). Regenerate it after
+adding or moving current `src/` functions:
+
+```bash
+/home/rshadi25/.conda/envs/gtalign_env/bin/python \
+  tools/build_pipeline_function_inventory.py
+```
+
 ## Working directory and interpreter
 
 Run commands from:
