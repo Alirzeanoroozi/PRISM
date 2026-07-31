@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-07-31
+
+### Features
+
+- Added `/PRISM`-compatible CLI aliases and runtime controls for input CSV,
+  template limits, surface and GTalign spellings, MultiProt, PyRosetta,
+  FiberDock, and explicit refinement gating.
+- Both bare flags and legacy explicit boolean values remain accepted where the
+  two entry points previously used different argparse conventions.
+
+### Fixes
+
+- Input CSV selection is now passed at call time instead of being limited to
+  the downloader's import-time environment value.
+- MultiProt executable and worker settings, PyRosetta output/init settings,
+  and FiberDock root selection are now wired to their actual backend calls.
+
+### Learnings
+
+- CLI spelling parity is separable from default-policy parity. Prescript keeps
+  its validated refinement-on default; `--no-refine` makes skipping explicit
+  without silently changing existing commands.
+
 ## 2026-07-30
 
 ### Features

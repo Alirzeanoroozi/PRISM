@@ -627,3 +627,26 @@ Consequences:
 - PRISM-main-archive `pre_scripts` branch now has full prescript feature set.
 - PRISM-prescript `feature/ranking-progression-system` branch also updated.
 - Both main branches remain clean.
+
+### Cross-repository CLI compatibility policy
+**Date:** 2026-07-31
+**Type:** compatibility
+**Status:** accepted
+
+Decision:
+- PRISM-prescript accepts the `/PRISM` option names while preserving existing
+  underscore/hyphen spellings as argparse aliases.
+- Prescript refinement remains enabled when neither `--refine` nor
+  `--no-refine` is supplied; `--no-refine` is the explicit skip control.
+- Backend paths and runtime settings are passed to the consuming functions,
+  rather than treated only as import-time environment configuration.
+
+Reason:
+- Commands should transfer between the repositories without invalid-option
+  failures, but changing prescript's established default refinement behavior
+  would invalidate stable run expectations.
+
+Consequences:
+- Option spelling is compatible, while repository-specific defaults remain
+  documented rather than silently unified.
+- New tests must cover both legacy prescript forms and `/PRISM` forms.

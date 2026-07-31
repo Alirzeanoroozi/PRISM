@@ -101,14 +101,15 @@ def materialize_chain_pdb(target):
     """Backward-compatible wrapper for the old single-chain helper."""
     return materialize_target_pdb(target)
 
-def pdb_downloader():
+def pdb_downloader(inputs_csv=None):
+    """Download targets declared by *inputs_csv* or the configured default."""
     receptor_targets = []
     ligand_targets = []
     raw_targets = []
 
     # Read pair list
     # Local change: read from env-configurable CSV path.
-    df = pd.read_csv(INPUTS_CSV)
+    df = pd.read_csv(inputs_csv or INPUTS_CSV)
     for _, row in df.iterrows():
         try:
             receptor_targets.append(normalize_target_id(row["Receptor"]))

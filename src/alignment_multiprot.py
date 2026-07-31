@@ -356,7 +356,13 @@ def _align_one(task):
     return None
 
 
-def align_multiprot(queries, templates, output_dir="processed/alignment", max_workers=8):
+def align_multiprot(
+    queries,
+    templates,
+    output_dir="processed/alignment",
+    max_workers=8,
+    multiprot_path=None,
+):
     """MultiProt alignment entry point for the PRISM pipeline.
     
     Aligns query proteins against template interfaces using MultiProt for
@@ -368,6 +374,15 @@ def align_multiprot(queries, templates, output_dir="processed/alignment", max_wo
         output_dir: Directory for alignment JSONs
         max_workers: Number of parallel worker threads
     """
+    global MULTIPROT, _MP_ABS
+    if multiprot_path:
+        MULTIPROT = str(multiprot_path)
+        _MP_ABS = (
+            os.path.abspath(MULTIPROT)
+            if os.path.sep in MULTIPROT
+            else shutil.which(MULTIPROT)
+        )
+
     alignment_root = os.path.abspath(output_dir)
     os.makedirs(alignment_root, exist_ok=True)
     
