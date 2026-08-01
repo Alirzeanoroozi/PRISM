@@ -650,3 +650,6 @@ Consequences:
 - Option spelling is compatible, while repository-specific defaults remain
   documented rather than silently unified.
 - New tests must cover both legacy prescript forms and `/PRISM` forms.
+- Implemented on `feature/prism-cli-parity` with reversible checkpoint commits
+  followed by `20ebf4c3cc3`; the focused compatibility/backend suite passed
+  31 tests. Unrelated dirty worktree files were intentionally not staged.
