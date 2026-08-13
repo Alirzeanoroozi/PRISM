@@ -53,8 +53,15 @@ def _resolve_entry(entry):
         return rec_path, lig_path, _extract_chain_ids(rec_path), _extract_chain_ids(lig_path), None
     if len(entry) == 4:
         rec_id, lig_id, template, combined = entry
-        rec_path = f"processed/transformation/{template}_{rec_id}_{lig_id}_R.pdb"
-        lig_path = f"processed/transformation/{template}_{rec_id}_{lig_id}_L.pdb"
+        combined_path = os.path.abspath(combined)
+        stem = os.path.splitext(os.path.basename(combined_path))[0]
+        expected_stem = f"{template}_{rec_id}_{lig_id}"
+        if not stem.startswith(expected_stem):
+            stem = expected_stem
+        processed_root = os.path.dirname(os.path.dirname(combined_path))
+        transformation_dir = os.path.join(processed_root, "transformation")
+        rec_path = os.path.join(transformation_dir, f"{stem}_R.pdb")
+        lig_path = os.path.join(transformation_dir, f"{stem}_L.pdb")
         return rec_path, lig_path, _extract_chain_ids(rec_path), _extract_chain_ids(lig_path), combined
     return None, None, None, None, None
 

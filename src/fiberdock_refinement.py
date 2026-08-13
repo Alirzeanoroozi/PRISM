@@ -26,8 +26,12 @@ FIBERDOCK_DIR = os.environ.get(
 STRUCTURES_DIR = "processed/fiberdock_refinement/structures"
 ENERGIES_DIR = "processed/fiberdock_refinement/energies"
 
-os.makedirs(STRUCTURES_DIR, exist_ok=True)
-os.makedirs(ENERGIES_DIR, exist_ok=True)
+FIBERDOCK_OUTPUT_PREFIX = "fiberdock_energies"
+
+
+def _ensure_output_dirs():
+    os.makedirs(STRUCTURES_DIR, exist_ok=True)
+    os.makedirs(ENERGIES_DIR, exist_ok=True)
 
 
 def _check_tools():
@@ -49,7 +53,7 @@ def _add_hydrogens(pdb_path, output_dir):
     """Add hydrogens to a PDB using Reduce."""
     base = os.path.basename(pdb_path).replace(".pdb", "")
     hb_path = os.path.join(output_dir, f"{base}.HB")
-    
+
     # Try reduce.3 first (64-bit where available), fall back to reduce.2
     reduce_exe = os.path.join(FIBERDOCK_DIR, "reduce")
     if not os.path.exists(reduce_exe):
@@ -58,9 +62,9 @@ def _add_hydrogens(pdb_path, output_dir):
             if os.path.exists(cand):
                 reduce_exe = cand
                 break
-    
+
     reduce_dict = os.path.join(FIBERDOCK_DIR, "reduce_het_dict.txt")
-    
+
     if not os.path.exists(hb_path):
         try:
             if reduce_exe.endswith(".pl"):
@@ -129,7 +133,7 @@ def _run_nma(ca_path, output_dir, normal_modes=50):
 
 def _build_fiberdock_params(receptor_hb, ligand_hb, output_dir, receptor, ligand):
     """Build FiberDock parameter file.
-    
+
     receptor_hb/ligand_hb: Paths to hydrogenated PDBs (legacy .HB format).
     Must run from FIBERDOCK_DIR so FindBin resolves lib/ correctly.
     """
@@ -138,7 +142,7 @@ def _build_fiberdock_params(receptor_hb, ligand_hb, output_dir, receptor, ligand
     if not os.path.exists(zero_trans):
         with open(zero_trans, "w") as f:
             f.write("1 0 0 0 0 0 0\n")
-    
+
     params_file = os.path.join(output_dir, "fd_params.txt")
     pair_key = f"{receptor}_{ligand}"
     subprocess.run(
@@ -148,7 +152,7 @@ def _build_fiberdock_params(receptor_hb, ligand_hb, output_dir, receptor, ligand
             os.path.abspath(ligand_hb),
             "U", "U", "Default",
             os.path.abspath(zero_trans),
-            os.path.abspath(os.path.join(output_dir, "fiberdock_energies")),
+            os.path.abspath(os.path.join(output_dir, FIBERDOCK_OUTPUT_PREFIX)),
             "0", "50", "0.80", "1", "glpk",
             os.path.abspath(params_file),
             "0.05",
@@ -165,13 +169,21 @@ def _build_fiberdock_params(receptor_hb, ligand_hb, output_dir, receptor, ligand
     return params_file
 
 
-def _run_fiberdock(params_file, fiberdock_dir, output_dir, receptor, ligand):
+def _run_fiberdock(params_file, fiberdock_dir, output_dir, receptor, ligand, pair_name=None):
     """Run FiberDock energy calculation.
-    
+
     FiberDock must run from its own directory to find lib/ files.
     It creates output files (paramName.ref, paramName.pdb) in CWD.
     """
+    _ensure_output_dirs()
     fib_out = os.path.join(output_dir, f"{receptor}_{ligand}.fib")
+    expected_outputs = (
+        os.path.join(output_dir, f"{FIBERDOCK_OUTPUT_PREFIX}.ref"),
+        os.path.join(output_dir, f"{FIBERDOCK_OUTPUT_PREFIX}_1.ref.pdb"),
+    )
+    for output_path in expected_outputs:
+        if os.path.isfile(output_path):
+            os.unlink(output_path)
     # Run from fiberdock dir so FiberDock finds its lib/
     result = subprocess.run(
         [os.path.join(FIBERDOCK_DIR, "FiberDock"),
@@ -182,19 +194,23 @@ def _run_fiberdock(params_file, fiberdock_dir, output_dir, receptor, ligand):
     # Save stdout
     with open(fib_out, "w") as f:
         f.write(result.stdout)
-    
-    # Move any created files to output_dir
+    if result.returncode != 0:
+        detail = result.stderr.strip() if result.stderr else "no stderr"
+        raise RuntimeError(
+            f"FiberDock failed with exit code {result.returncode}: {detail}"
+        )
+
+    # FiberDock names outputs after energiesOutFileName, not fd_params.txt.
     import glob as _glob
-    params_base = os.path.splitext(os.path.basename(params_file))[0]
-    for f in _glob.glob(os.path.join(fiberdock_dir, f"{params_base}*")):
+    for f in _glob.glob(os.path.join(fiberdock_dir, f"{FIBERDOCK_OUTPUT_PREFIX}*")):
         dst = os.path.join(output_dir, os.path.basename(f))
         if os.path.abspath(f) != os.path.abspath(dst):
             import shutil as _shutil
             _shutil.move(f, dst)
-    
+
     # Parse energy
     energy = "-"
-    ref_file = os.path.join(output_dir, f"{params_base}.ref")
+    ref_file = os.path.join(output_dir, f"{FIBERDOCK_OUTPUT_PREFIX}.ref")
     if os.path.exists(ref_file):
         with open(ref_file) as f:
             for line in f:
@@ -203,25 +219,41 @@ def _run_fiberdock(params_file, fiberdock_dir, output_dir, receptor, ligand):
                     # Format: Sol # | glob | aVdW | rVdW | ...
                     energy = parts[1]  # glob = total energy
                     break
-    
+
+        aggregate_name = f"{pair_name}.ref" if pair_name else os.path.basename(ref_file)
+        aggregate_path = os.path.join(ENERGIES_DIR, aggregate_name)
+        if os.path.abspath(ref_file) != os.path.abspath(aggregate_path):
+            shutil.copy2(ref_file, aggregate_path)
+
+    refined = os.path.join(output_dir, f"{FIBERDOCK_OUTPUT_PREFIX}_1.ref.pdb")
+    if os.path.isfile(refined):
+        aggregate_name = (
+            f"{pair_name}_fiberdock.ref.pdb"
+            if pair_name else os.path.basename(refined)
+        )
+        aggregate_path = os.path.join(STRUCTURES_DIR, aggregate_name)
+        if os.path.abspath(refined) != os.path.abspath(aggregate_path):
+            shutil.copy2(refined, aggregate_path)
+
     return energy
 
 
 def refine_pairs(passed_pairs):
     """FiberDock refinement entry point.
-    
+
     Args:
         passed_pairs: List of (ligand_pdb, receptor_pdb) tuples from transformer.
     """
+    _ensure_output_dirs()
     if not _check_tools():
         print("FiberDock: tools not available, skipping refinement")
         return []
-    
+
     # Build a map: passed_pairs contains paths to R and L PDBs
     # Need to group them by (template_query_orientation)
     from collections import defaultdict
     pair_groups = defaultdict(lambda: {"R": None, "L": None})
-    
+
     for pair in passed_pairs:
         for path in pair:
             if path.endswith("_R.pdb"):
@@ -230,44 +262,44 @@ def refine_pairs(passed_pairs):
             elif path.endswith("_L.pdb"):
                 base = path.replace("_L.pdb", "")
                 pair_groups[base]["L"] = path
-    
+
     results = []
     for base, files in pair_groups.items():
         if not files["R"] or not files["L"]:
             continue
-        
+
         r_path = files["R"]
         l_path = files["L"]
         pair_name = os.path.basename(base)
-        
+
         print(f"FiberDock refining {pair_name}...")
-        
+
         # Create working dir
         work_dir = os.path.join("processed/fiberdock_refinement", pair_name)
         os.makedirs(work_dir, exist_ok=True)
-        
+
         # Step 1: Add hydrogens
         r_hb = _add_hydrogens(r_path, work_dir)
         l_hb = _add_hydrogens(l_path, work_dir)
         if not r_hb or not l_hb:
             print(f"  FiberDock: hydrogen addition failed for {pair_name}")
             continue
-        
+
         # Step 2: Create CA PDBs
         r_ca, r_sizes = _create_ca_pdb(r_path, work_dir)
         l_ca, l_sizes = _create_ca_pdb(l_path, work_dir)
-        
+
         # Step 3: Run NMA
         r_nma = _run_nma(r_ca, work_dir)
         l_nma = _run_nma(l_ca, work_dir)
         if not r_nma or not l_nma:
             print(f"  FiberDock: NMA failed for {pair_name}")
             continue
-        
+
         # Step 4: Determine receptor/ligand (larger = receptor)
         r_total = sum(r_sizes.values())
         l_total = sum(l_sizes.values())
-        
+
         if r_total >= l_total:
             receptor_base = os.path.basename(r_path).replace(".pdb", "")
             ligand_base = os.path.basename(l_path).replace(".pdb", "")
@@ -275,33 +307,26 @@ def refine_pairs(passed_pairs):
             receptor_base = os.path.basename(l_path).replace(".pdb", "")
             ligand_base = os.path.basename(r_path).replace(".pdb", "")
             r_hb, l_hb = l_hb, r_hb
-        
+
         # Step 5: Build FiberDock params
         params_file = _build_fiberdock_params(
             r_hb, l_hb, work_dir, receptor_base, ligand_base
         )
-        
+
         if not os.path.exists(params_file):
             print(f"  FiberDock: params file not created: {params_file}")
             continue
-        
+
         # Step 6: Run FiberDock (from fiberdock dir so it finds lib/)
         fiberdock_cwd = FIBERDOCK_DIR
-        energy = _run_fiberdock(params_file, fiberdock_cwd, work_dir, receptor_base, ligand_base)
-        
-        # Step 7: Copy refined structure if any
-        # FiberDock writes ${params_base}.pdb to CWD (fiberdock dir)
-        params_base = os.path.splitext(os.path.basename(params_file))[0]
-        for ext in [".pdb", ".ref"]:
-            src = os.path.join(fiberdock_cwd, f"{params_base}{ext}")
-            if os.path.exists(src):
-                import shutil
-                dst = os.path.join(STRUCTURES_DIR, f"{pair_name}_fiberdock{ext}")
-                shutil.copy2(src, dst)
-        
+        energy = _run_fiberdock(
+            params_file, fiberdock_cwd, work_dir, receptor_base, ligand_base,
+            pair_name=pair_name,
+        )
+
         results.append((pair_name, energy))
         print(f"  FiberDock energy: {energy}")
-    
+
     return results
 
 
@@ -356,11 +381,8 @@ def refine_merged_candidates(candidates):
         results = refine_pairs([(str(receptor_pdb), str(ligand_pdb))])
         if not results:
             continue
-        work_output = Path("processed/fiberdock_refinement") / key / "fd_params.pdb"
-        if not work_output.is_file():
+        destination = Path(STRUCTURES_DIR) / f"{key}_fiberdock.ref.pdb"
+        if not destination.is_file():
             continue
-        destination = Path(STRUCTURES_DIR) / f"{key}_fiberdock.pdb"
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(work_output, destination)
         accepted.append((receptor, ligand, template, str(destination)))
     return accepted

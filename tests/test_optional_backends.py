@@ -13,6 +13,8 @@ def test_cli_preserves_existing_backend_defaults():
     assert args.refiner == "external_rosetta"
     assert args.refine is False
     assert args.surface_backend == "freesasa"
+    assert args.multiprot_mode == "current"
+    assert args.multiprot_solutions == 3
 
 
 def test_pyrosetta_merged_adapter_preserves_tuple(monkeypatch, tmp_path):

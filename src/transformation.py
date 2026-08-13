@@ -145,60 +145,84 @@ def process_pair_for_template(receptor, ligand):
             for lig in lig_rows:
                 if rec["chain"] == lig["chain"]:
                     continue
-                candidate = _evaluate(receptor, ligand, template, rec, lig)
-                if candidate:
-                    candidates.append(candidate)
+                candidates.extend(_evaluate(receptor, ligand, template, rec, lig))
 
     candidates.sort(key=lambda c: c["score"], reverse=True)
     return candidates
 
 
+def _alignment_variants(protein, template, chain, summary):
+    """Promote retained legacy MultiProt solutions to normal alignment records."""
+    path = os.path.join(ALIGNMENT_DIR, f"{protein}_{template}_{chain}.json")
+    try:
+        with open(path) as handle:
+            payload = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return [summary]
+    solutions = payload.get("multiprot_solutions")
+    if not isinstance(solutions, list) or not solutions:
+        merged = dict(summary)
+        merged.update(payload)
+        return [merged]
+    variants = []
+    for solution in solutions:
+        variant = dict(summary)
+        variant.update(payload)
+        variant.update(solution)
+        variant["tm_score"] = payload.get("tm_score", 0.0)
+        variants.append(variant)
+    return variants
+
+
 def _evaluate(receptor, ligand, template, rec_align, lig_align):
     rec_chain = rec_align["chain"]
     lig_chain = lig_align["chain"]
-    rec_match = _load_match_dict(receptor, template, rec_chain)
-    lig_match = _load_match_dict(ligand, template, lig_chain)
-    if not rec_match or not lig_match:
-        return None
-
-    if not _hotspot_supported(template, rec_chain, rec_match):
-        return None
-    if not _hotspot_supported(template, lig_chain, lig_match):
-        return None
-    if not _contact_supported(template, rec_match, lig_match, rec_chain, lig_chain):
-        return None
-
     rec_pdb_id, rec_chains = split_target_id(receptor)
     lig_pdb_id, lig_chains = split_target_id(ligand)
-
     receptor_input = f"processed/pdbs/{rec_pdb_id}.pdb"
     ligand_input = f"processed/pdbs/{lig_pdb_id}.pdb"
-    receptor_output = f"{TRANSFORMATION_DIR}/{template}_{receptor}_{ligand}_R.pdb"
-    ligand_output = f"{TRANSFORMATION_DIR}/{template}_{receptor}_{ligand}_L.pdb"
-    final_output = f"{MERGE_DIR}/{template}_{receptor}_{ligand}.pdb"
+    rec_variants = _alignment_variants(receptor, template, rec_chain, rec_align)
+    lig_variants = _alignment_variants(ligand, template, lig_chain, lig_align)
+    multiple = len(rec_variants) > 1 or len(lig_variants) > 1
+    accepted = []
+    for rec_index, rec_variant in enumerate(rec_variants):
+        for lig_index, lig_variant in enumerate(lig_variants):
+            rec_match = rec_variant.get("match_dict", {})
+            lig_match = lig_variant.get("match_dict", {})
+            if not rec_match or not lig_match:
+                continue
+            if not _hotspot_supported(template, rec_chain, rec_match):
+                continue
+            if not _hotspot_supported(template, lig_chain, lig_match):
+                continue
+            if not _contact_supported(template, rec_match, lig_match, rec_chain, lig_chain):
+                continue
 
-    rec_translation = _parse_vec(rec_align.get("translation"), [0.0, 0.0, 0.0])
-    rec_rotation = _parse_vec(rec_align.get("rotation_mat"), [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
-    lig_translation = _parse_vec(lig_align.get("translation"), [0.0, 0.0, 0.0])
-    lig_rotation = _parse_vec(lig_align.get("rotation_mat"), [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
-
-    apply_tm_transform(receptor_input, receptor_output, rec_translation, rec_rotation, keep_chains=set(rec_chains))
-    apply_tm_transform(ligand_input, ligand_output, lig_translation, lig_rotation, keep_chains=set(lig_chains))
-
-    if not pair_has_acceptable_clashes(receptor_output, ligand_output):
-        return None
-
-    merge_pdb_files(receptor_output, ligand_output, final_output)
-    score = float(rec_align["tm_score"]) + float(lig_align["tm_score"])
-    return {
-        "receptor": receptor,
-        "ligand": ligand,
-        "template": template,
-        "rec_chain": rec_chain,
-        "lig_chain": lig_chain,
-        "score": score,
-        "output_pdb": final_output,
-    }
+            suffix = f"_s{rec_index}_{lig_index}" if multiple else ""
+            receptor_output = f"{TRANSFORMATION_DIR}/{template}_{receptor}_{ligand}{suffix}_R.pdb"
+            ligand_output = f"{TRANSFORMATION_DIR}/{template}_{receptor}_{ligand}{suffix}_L.pdb"
+            final_output = f"{MERGE_DIR}/{template}_{receptor}_{ligand}{suffix}.pdb"
+            rec_translation = _parse_vec(rec_variant.get("translation"), [0.0, 0.0, 0.0])
+            rec_rotation = _parse_vec(rec_variant.get("rotation_mat"), [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
+            lig_translation = _parse_vec(lig_variant.get("translation"), [0.0, 0.0, 0.0])
+            lig_rotation = _parse_vec(lig_variant.get("rotation_mat"), [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
+            if not apply_tm_transform(receptor_input, receptor_output, rec_translation, rec_rotation, keep_chains=set(rec_chains)):
+                continue
+            if not apply_tm_transform(ligand_input, ligand_output, lig_translation, lig_rotation, keep_chains=set(lig_chains)):
+                continue
+            if not pair_has_acceptable_clashes(receptor_output, ligand_output):
+                continue
+            merge_pdb_files(receptor_output, ligand_output, final_output)
+            accepted.append({
+                "receptor": receptor,
+                "ligand": ligand,
+                "template": template,
+                "rec_chain": rec_chain,
+                "lig_chain": lig_chain,
+                "score": float(rec_variant.get("tm_score", 0.0)) + float(lig_variant.get("tm_score", 0.0)),
+                "output_pdb": final_output,
+            })
+    return accepted
 
 
 def apply_tm_transform(input_pdb, output_pdb, translation, rotation_mat, keep_chains=None):

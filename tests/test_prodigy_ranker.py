@@ -43,6 +43,24 @@ def test_prodigy_selects_lowest_affinity_per_merged_candidate(monkeypatch, tmp_p
     assert selected == [candidates[1]]
 
 
+def test_requested_ranking_fails_when_a_candidate_cannot_be_scored(monkeypatch, tmp_path):
+    executable = tmp_path / "prodigy"
+    executable.write_text("placeholder")
+    candidates = [("1abcA", "1abcB", "tpl1", "one.pdb")]
+    monkeypatch.setattr(
+        prodigy_ranker,
+        "score_candidate",
+        lambda *args, **kwargs: prodigy_ranker.ProdigyScore(
+            "one.pdb", "failed", None, None, (), "", "broken", 2
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="PRODIGY failed"):
+        prodigy_ranker.select_top_candidates(
+            candidates, top_k=1, executable=str(executable), output_dir=str(tmp_path)
+        )
+
+
 def test_score_candidate_passes_merged_pdb_and_chain_selections(tmp_path):
     candidate = tmp_path / "candidate.pdb"
     candidate.write_text(

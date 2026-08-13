@@ -119,6 +119,10 @@ def main(args):
             templates,
             output_dir="processed/alignment",
             max_workers=args.multiprot_workers,
+            multiprot_path=args.multiprot_path,
+            multiprot_mode=args.multiprot_mode,
+            multiprot_params=args.multiprot_params,
+            multiprot_solutions=args.multiprot_solutions,
         ))
 
     print("[5/6] Transformation + filtering")
@@ -209,6 +213,22 @@ def build_parser():
     parser.add_argument(
         "--multiprot-path",
         default=os.environ.get("PRISM_MULTIPROT", "external_tools/multiprot.Linux"),
+    )
+    parser.add_argument(
+        "--multiprot-mode",
+        choices=["current", "legacy_compatible"],
+        default="current",
+        help="Use the current Kabsch adapter or preserve legacy solver transforms.",
+    )
+    parser.add_argument(
+        "--multiprot-params",
+        help="Optional MultiProt params.txt copied into each isolated worker directory.",
+    )
+    parser.add_argument(
+        "--multiprot-solutions",
+        type=int,
+        default=3,
+        help="Maximum legacy-compatible solutions retained per query/interface alignment.",
     )
     parser.add_argument(
         "--surface-backend",

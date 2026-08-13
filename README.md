@@ -7,12 +7,12 @@ End-to-end pipeline:
    hotspot tables, residue contact maps).
 3. Compute target surface residues with FreeSASA.
 4. Structurally align target surfaces to every template interface chain with
-   TM-align (default) or GTalign.
+   TM-align (default), GTalign, or optional MultiProt.
 5. For each receptor-ligand pair, find templates that match both sides,
    transform each input into the template frame, filter by HotPoint-style
    hotspot support, inter-template contact support, and CA-CA steric clash.
-6. Optionally run a Rosetta prepack + local docking refinement on accepted
-   complexes.
+6. Optionally refine accepted complexes with external Rosetta, PyRosetta, or
+   FiberDock, and optionally rank candidates before refinement.
 
 ## Inputs
 
@@ -47,6 +47,17 @@ conda install minmarg::gtalign_gpu  # GPU
 
 For Rosetta refinement install [PyRosetta](https://www.pyrosetta.org/).
 
+Optional backends are loaded only when selected:
+
+- MultiProt: provide a compatible executable with `--multiprot-path`. The
+  historical 32-bit binary requires an execution context that permits it.
+- PyRosetta: install it in the Python environment used to run `prism.py`.
+- FiberDock: stage `FiberDock`, `nma`, `buildFiberDockParams.pl`, hydrogenation
+  helpers, and their support files under one directory passed with
+  `--fiberdock-dir`.
+- PRODIGY: provide its command with `--prodigy-executable` when selecting
+  `--rank-method prodigy`.
+
 ## Templates
 
 Download the template archive and extract it before running the template
@@ -71,6 +82,23 @@ python prism.py --aligner gtalign --gtalign_path /path/to/gtalign
 
 # Restrict to top N templates and run Rosetta refinement
 python prism.py --template_limit 100 --refine
+
+# Current MultiProt adapter
+python prism.py --aligner multiprot --multiprot-path /path/to/multiprot.Linux
+
+# Legacy-compatible MultiProt invocation and retained solver solutions
+python prism.py --aligner multiprot \
+  --multiprot-mode legacy_compatible \
+  --multiprot-path /path/to/multiprot.Linux \
+  --multiprot-params /path/to/params.txt \
+  --multiprot-solutions 3
+
+# Explicit refinement backends
+python prism.py --refine --refiner pyrosetta
+python prism.py --refine --refiner fiberdock --fiberdock-dir /path/to/fiberdock
+
+# Opt-in candidate ranking before refinement
+python prism.py --rank true --top-k 5 --rank-method baseline
 ```
 
 Accepted complexes land in `processed/output/`; per-stage intermediates live

@@ -65,3 +65,23 @@ def test_resolve_entry_4tuple():
     rec, lig, lc, rc, combined = res
     assert "3i6eE" in rec and "3i6eF" in lig
     assert combined == "processed/output/file.pdb"
+
+
+def test_resolve_entry_4tuple_preserves_solution_suffix(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    transformation = tmp_path / "processed" / "transformation"
+    output = tmp_path / "processed" / "output"
+    transformation.mkdir(parents=True)
+    output.mkdir(parents=True)
+    stem = "2ai9AB_3i6eE_3i6eF_s1_2"
+    rec = transformation / f"{stem}_R.pdb"
+    lig = transformation / f"{stem}_L.pdb"
+    rec.write_text("ATOM      1  CA  ALA E   1       0.000   0.000   0.000  1.00  0.00           C  \n")
+    lig.write_text("ATOM      1  CA  ALA F   1       5.000   0.000   0.000  1.00  0.00           C  \n")
+    combined = output / f"{stem}.pdb"
+    combined.write_text("END\n")
+
+    resolved = _resolve_entry(("3i6eE", "3i6eF", "2ai9AB", str(combined)))
+
+    assert resolved[:4] == (str(rec), str(lig), ["E"], ["F"])
+    assert resolved[4] == str(combined)

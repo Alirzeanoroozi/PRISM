@@ -147,8 +147,12 @@ def select_top_candidates(
             for candidate in group
         ]
         if any(score.status != "scored" for score in scores):
-            selected.extend(group)
-            continue
+            failed = [score for score in scores if score.status != "scored"]
+            details = "; ".join(
+                f"{score.candidate_pdb}: {score.status} ({score.error or score.stderr_path or 'no detail'})"
+                for score in failed
+            )
+            raise RuntimeError(f"PRODIGY failed to score requested candidates: {details}")
         ranked = sorted(zip(group, scores), key=lambda item: item[1].affinity_kcal_mol)
         selected.extend(candidate for candidate, _ in ranked[:top_k])
     return selected
