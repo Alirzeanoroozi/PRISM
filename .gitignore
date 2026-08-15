@@ -1,12 +1,8 @@
 .pyc
 .DS_Store
 .vscode/
-.agents/
-.codex/
 assets/
 logs/
 templates/
 processed/
 __pycache__
-graphify-deepseek-valar.log
-graphify-out/
