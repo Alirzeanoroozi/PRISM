@@ -17,6 +17,35 @@ def test_cli_preserves_existing_backend_defaults():
     assert args.multiprot_solutions == 3
 
 
+def test_alignment_stage_dispatches_tmalign(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        prism,
+        "align",
+        lambda targets, templates: calls.append((targets, templates)),
+    )
+
+    args = prism.build_parser().parse_args([])
+    prism.run_alignment_stage(args, ["target"], ["template"])
+
+    assert calls == [(["target"], ["template"])]
+
+
+def test_ranking_stage_disabled_preserves_candidates():
+    candidates = [("rec", "lig", "tpl", "candidate.pdb")]
+    args = prism.build_parser().parse_args([])
+
+    assert prism.run_ranking_stage(args, candidates) is candidates
+
+
+def test_external_rosetta_empty_result_preserves_original_candidates(monkeypatch):
+    candidates = [("rec", "lig", "tpl", "candidate.pdb")]
+    monkeypatch.setattr(prism, "refiner", lambda passed: [])
+    args = prism.build_parser().parse_args(["--refine"])
+
+    assert prism.run_refinement_stage(args, candidates) == candidates
+
+
 def test_pyrosetta_merged_adapter_preserves_tuple(monkeypatch, tmp_path):
     candidate = tmp_path / "candidate.pdb"
     candidate.write_text("END\n")

@@ -66,6 +66,100 @@ def _select_baseline_top_k(candidates, top_k):
             counts[key] = counts.get(key, 0) + 1
     return selected
 
+
+def run_alignment_stage(args, targets, templates):
+    if args.aligner == "tmalign":
+        return run_stage("alignment", lambda: align(targets, templates))
+    if args.aligner == "gtalign":
+        return run_stage("alignment", lambda: align_gtalign(
+            targets,
+            templates,
+            gtalign_path=args.gtalign_path,
+            dev_min_length=args.gtalign_dev_min_length,
+            pre_score=args.gtalign_pre_score,
+            speed=args.gtalign_speed,
+            refinement=args.gtalign_refinement,
+        ))
+
+    os.environ["PRISM_MULTIPROT"] = args.multiprot_path
+    from src.alignment_multiprot import align_multiprot
+
+    return run_stage("alignment", lambda: align_multiprot(
+        targets,
+        templates,
+        output_dir="processed/alignment",
+        max_workers=args.multiprot_workers,
+        multiprot_path=args.multiprot_path,
+        multiprot_mode=args.multiprot_mode,
+        multiprot_params=args.multiprot_params,
+        multiprot_solutions=args.multiprot_solutions,
+    ))
+
+
+def run_ranking_stage(args, candidates):
+    if not args.rank:
+        return candidates
+    if args.top_k < 1:
+        raise ValueError("--top-k must be positive when --rank is enabled")
+
+    print(f"[5a/6] Candidate ranking ({args.rank_method})")
+    if args.rank_method == "baseline":
+        selected = run_stage(
+            "ranking", lambda: _select_baseline_top_k(candidates, args.top_k),
+        )
+    else:
+        from src.prodigy_ranker import select_top_candidates
+
+        selected = run_stage("ranking", lambda: select_top_candidates(
+            candidates,
+            top_k=args.top_k,
+            executable=args.prodigy_executable,
+            output_dir=args.prodigy_output_dir,
+            distance_cutoff=args.prodigy_distance_cutoff,
+            acc_threshold=args.prodigy_acc_threshold,
+            temperature=args.prodigy_temperature,
+            timeout=args.prodigy_timeout,
+        ))
+    print(f"  selected {len(selected)} candidate(s)")
+    return selected
+
+
+def run_refinement_stage(args, candidates):
+    compare_pairs = list(candidates)
+    if not args.refine or not candidates:
+        return compare_pairs
+
+    print(f"[6a/6] {args.refiner} refinement")
+    if args.refiner == "external_rosetta":
+        refined = run_stage("refinement", lambda: refiner(candidates))
+        for rec, lig, isc, tsc, output_path in refined:
+            print(
+                f"  refined {rec} + {lig}: "
+                f"int={isc} total={tsc} -> {output_path}"
+            )
+        if refined:
+            compare_pairs = [
+                (rec, lig, template, output_pdb)
+                for (rec, lig, template, _), (_, _, _, _, output_pdb)
+                in zip(candidates, refined)
+            ]
+        return compare_pairs
+
+    if args.refiner == "pyrosetta":
+        from src.pyrosetta_refinement import refine_merged_candidates
+
+        return run_stage("refinement", lambda: refine_merged_candidates(
+            candidates,
+            output_root=args.pyrosetta_output_dir,
+            init_options=args.pyrosetta_init_options,
+        ))
+
+    os.environ["PRISM_FIBERDOCK_DIR"] = args.fiberdock_dir
+    from src.fiberdock_refinement import refine_merged_candidates
+
+    return run_stage("refinement", lambda: refine_merged_candidates(candidates))
+
+
 def main(args):
     if args.surface_backend != "freesasa":
         raise ValueError(f"Unsupported surface backend: {args.surface_backend}")
@@ -98,32 +192,7 @@ def main(args):
         print(f"  WARNING: surface extraction failed for {failed_surfaces} target(s)")
 
     print(f"[4/6] Structural alignment ({args.aligner})")
-    if args.aligner == "tmalign":
-        run_stage("alignment", lambda: align(targets, templates))
-    elif args.aligner == "gtalign":
-        run_stage("alignment", lambda: align_gtalign(
-            targets,
-            templates,
-            gtalign_path=args.gtalign_path,
-            dev_min_length=args.gtalign_dev_min_length,
-            pre_score=args.gtalign_pre_score,
-            speed=args.gtalign_speed,
-            refinement=args.gtalign_refinement,
-        ))
-    else:
-        os.environ["PRISM_MULTIPROT"] = args.multiprot_path
-        from src.alignment_multiprot import align_multiprot
-
-        run_stage("alignment", lambda: align_multiprot(
-            targets,
-            templates,
-            output_dir="processed/alignment",
-            max_workers=args.multiprot_workers,
-            multiprot_path=args.multiprot_path,
-            multiprot_mode=args.multiprot_mode,
-            multiprot_params=args.multiprot_params,
-            multiprot_solutions=args.multiprot_solutions,
-        ))
+    run_alignment_stage(args, targets, templates)
 
     print("[5/6] Transformation + filtering")
     passed = run_stage(
@@ -134,52 +203,8 @@ def main(args):
     for receptor, ligand, template, output in passed:
         print(f"  {receptor} + {ligand} via {template} -> {output}")
 
-    if args.rank:
-        if args.top_k < 1:
-            raise ValueError("--top-k must be positive when --rank is enabled")
-        print(f"[5a/6] Candidate ranking ({args.rank_method})")
-        if args.rank_method == "baseline":
-            passed = run_stage("ranking", lambda: _select_baseline_top_k(passed, args.top_k))
-        else:
-            from src.prodigy_ranker import select_top_candidates
-
-            passed = run_stage("ranking", lambda: select_top_candidates(
-                passed,
-                top_k=args.top_k,
-                executable=args.prodigy_executable,
-                output_dir=args.prodigy_output_dir,
-                distance_cutoff=args.prodigy_distance_cutoff,
-                acc_threshold=args.prodigy_acc_threshold,
-                temperature=args.prodigy_temperature,
-                timeout=args.prodigy_timeout,
-            ))
-        print(f"  selected {len(passed)} candidate(s)")
-
-    compare_pairs = list(passed)
-    if args.refine and passed:
-        print(f"[6a/6] {args.refiner} refinement")
-        if args.refiner == "external_rosetta":
-            refined = run_stage("refinement", lambda: refiner(passed))
-            for rec, lig, isc, tsc, op in refined:
-                print(f"  refined {rec} + {lig}: int={isc} total={tsc} -> {op}")
-            if refined:
-                compare_pairs = [
-                    (rec, lig, tpl, out_pdb)
-                    for (rec, lig, tpl, _), (_, _, _, _, out_pdb) in zip(passed, refined)
-                ]
-        elif args.refiner == "pyrosetta":
-            from src.pyrosetta_refinement import refine_merged_candidates
-
-            compare_pairs = run_stage("refinement", lambda: refine_merged_candidates(
-                passed,
-                output_root=args.pyrosetta_output_dir,
-                init_options=args.pyrosetta_init_options,
-            ))
-        else:
-            os.environ["PRISM_FIBERDOCK_DIR"] = args.fiberdock_dir
-            from src.fiberdock_refinement import refine_merged_candidates
-
-            compare_pairs = run_stage("refinement", lambda: refine_merged_candidates(passed))
+    passed = run_ranking_stage(args, passed)
+    compare_pairs = run_refinement_stage(args, passed)
 
     print("[6/6] Compare outputs vs native + DockQ")
     if compare_pairs:
@@ -198,6 +223,7 @@ def main(args):
             )
     else:
         print("  no accepted outputs to compare")
+
 
 def build_parser():
     parser = argparse.ArgumentParser()

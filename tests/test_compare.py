@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from compare_outputs import parse_output_filename
+from sandbox.compare_outputs import parse_output_filename
 from src.compare import ca_rmsd, compare_pair, get_trimmed_native_pdb
 from tests.conftest import _atom
 
