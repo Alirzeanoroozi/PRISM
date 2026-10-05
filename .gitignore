@@ -27,3 +27,35 @@ src/__pycache__/
 benchmark/scripts/__pycache__/
 templates
 template_files/
+
+# Remote sync eligibility: keep Markdown, scripts, and notebooks trackable in
+# nested project directories. .gitignore does not run git commit or git push.
+**
+!**/
+!**/*.md
+!**/*.py
+!**/*.sh
+!**/*.bash
+!**/*.sbatch
+!**/*.r
+!**/*.R
+!**/*.pl
+!**/*.jl
+!**/*.js
+!**/*.ts
+!**/*.ipynb
+
+# Keep generated dependency and runtime caches excluded from that allowlist.
+**/.cache/
+**/cache/
+**/node_modules/
+**/site-packages/
+**/__pycache__/
+**/.pytest_cache/
+**/.ipynb_checkpoints/
+**/.venv/
+**/venv/
+**/env/
+**/*_env/
+**/*-env/
+**/copilot-home/
