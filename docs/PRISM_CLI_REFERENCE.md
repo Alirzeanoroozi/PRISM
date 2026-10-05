@@ -58,21 +58,18 @@ python prism.py --inputs-csv inputs.csv
 
 The CSV must contain `Receptor` and `Ligand` columns.
 
-Status: **parser-supported, partially runtime-wired**. The selected path is
-passed to `src.pdb_download.py:pdb_downloader()`. However,
-`src/transformation.py:transformer()` still reads its module-level
-`PRISM_INPUTS_CSV`/`inputs.csv` path. Until propagation is unified, a custom
-CLI path can make download and transformation read different CSVs.
+Status: **parser-supported and runtime-wired**. The selected path is passed to
+both `src.pdb_download.py:pdb_downloader()` and
+`src/transformation.py:transformer()`. The environment variable
+`PRISM_INPUTS_CSV` remains a default fallback for callers that invoke the
+transformer directly.
 
-Safe current workaround for an isolated run:
+Use a separate CSV for an isolated comparison without modifying the shared
+`inputs.csv`:
 
 ```bash
-PRISM_INPUTS_CSV=/absolute/path/pairs.csv \
-python prism.py --inputs_csv /absolute/path/pairs.csv [OTHER OPTIONS]
+python prism.py --inputs-csv /absolute/path/pairs.csv [OTHER OPTIONS]
 ```
-
-Use the same absolute path in both controls and record it in the run manifest.
-Do not modify the repository's shared `inputs.csv` merely to route a test.
 
 ### Generate templates
 
@@ -101,6 +98,21 @@ python prism.py --template_limit 100
 
 If omitted, prescript uses the complete `templates/calculated_templates.txt`
 manifest. A supplied limit must be positive.
+
+### Select templates explicitly
+
+Use either a plain-text manifest or explicit six-character template IDs:
+
+```bash
+python prism.py --template-list /absolute/path/template_subset.txt --no-refine
+python prism.py --templates 1zx4AB 1ngmEF --no-refine
+python prism.py --templates 1zx4AB,1ngmEF --template-limit 1 --no-refine
+```
+
+The two selection options are mutually exclusive. Explicit selection replaces
+the generated/default panel, and `--template-limit` is applied after
+selection. The current template contract is a four-character PDB ID followed
+by two chain IDs, for example `1zx4AB`.
 
 ## Surface extraction
 
@@ -191,6 +203,117 @@ Both values are runtime-wired to
 runtime constraints, fragment-length bias, and separate score/gate contract
 still apply.
 
+## Orientation comparison
+
+The transformation stage supports native and fixed-orientation comparison
+runs through `--orientation`:
+
+```bash
+# Native MultiProt-like behavior: evaluate both implicit assignments.
+python prism.py --orientation native --no-refine
+
+# Fixed-assignment comparison runs.
+python prism.py --orientation o1 --no-refine
+python prism.py --orientation o2 --no-refine
+```
+
+Omitting `--orientation` deterministically selects `native`, which evaluates
+both assignments (`o1` and `o2`),
+retaining their labels in transformation filenames and candidate audits.
+`o1` and `o2` constrain only the transformation-stage branch; all other
+inputs, thresholds, aligner settings, and refinement settings should be held
+constant when comparing runs. This is an orientation restriction, not an
+instruction to ignore template-chain assignment, which would invalidate
+chain-specific contacts and transforms.
+
+Preserve each run in a separate isolated output/work directory when comparing
+generated PDBs: the stable transformation filenames include `o1`/`o2`, but a
+fixed `o1` run can otherwise overwrite the native run's `o1` artifacts.
+
+Status: **parser-supported and runtime-wired**. The comparison contract is
+covered by focused tests; scientific equivalence to every legacy run remains
+an empirical validation question.
+
+For the recommended diagnostic order, use
+`notebooks/pipeline_orientation_comparison.ipynb`. It freezes the production
+baseline, records asset/source hashes and orientation partner availability,
+builds alignment and independent gate ledgers, replays the clash grid, checks
+refinement evidence, compares ranking methods only on an explicitly supplied
+same-set candidate panel, and keeps US-align as a preflight-only separate arm.
+When native-like recovery is supplied, the notebook also requires an
+independent native-label source path and SHA-256; PRODIGY affinity is never a
+native-like label. The manifest includes the template interface-list JSON used
+for chain-specific coverage; incomplete alignment return/status or raw-output
+hash evidence keeps dependent gate outcomes unknown.
+
+## Transformation thresholds
+
+Transformation thresholds are environment-backed for compatibility and can be
+overridden per run from the CLI. Omitted options retain the current defaults:
+
+```text
+minimum-residue-match-count       15
+minimum-residue-match-percentage  50.0
+minimum-hotspot-match-number      1
+diff-percentage                   20.0
+template-residue-count            50
+contact-count-threshold           5
+clashing-distance                 3.0 Å
+max-clashing-count                5
+scaffold-threshold                5.0 Å
+tm-score-threshold                0.5
+MultiProt match count / coverage   10 / 30.0%
+alignment-gate-mode               native
+```
+
+All controls are available as hyphenated CLI options, for example:
+
+```bash
+python prism.py \
+  --minimum-residue-match-count 12 \
+  --minimum-residue-match-percentage 35 \
+  --diff-percentage 25 \
+  --clashing-distance 2.5 \
+  --max-clashing-count 8 \
+  --scaffold-threshold 5.0 \
+  --tm-score-threshold 0.4 \
+  --no-refine
+```
+
+The MultiProt-specific controls are
+`--multiprot-minimum-residue-match-count` and
+`--multiprot-minimum-residue-match-percentage`. These are separate from the
+TMalign/GTalign TM-score gate because MultiProt uses native correspondence
+count and interface coverage. Threshold changes are diagnostic until assessed
+against a fixed benchmark with raw, qualified, contact, clash, and downstream
+outcomes recorded.
+
+### Comparable cross-aligner mode
+
+For a controlled TMalign/USalign/GTalign/MultiProt threshold comparison, use:
+
+```bash
+python prism.py \
+  --alignment-gate-mode common_match_coverage \
+  --minimum-residue-match-count 15 \
+  --minimum-residue-match-percentage 50 \
+  --diff-percentage 20 \
+  --orientation native \
+  --no-refine
+```
+
+`common_match_coverage` applies the same matched-residue count and size-adjusted
+interface-coverage gates to every aligner, using an inclusive boundary. It
+does not apply `tm-score-threshold`, because MultiProt's RMSD-derived score is
+not a TMalign-compatible TM-score. Provider scores remain in the alignment
+records for post-hoc analysis. The default `native` mode is unchanged.
+
+Candidate-audit rows also retain the resolved threshold dictionary and use
+distinct terminal statuses for missing alignment, protocol rejection,
+alignment-threshold rejection, transformation failure, and clash rejection.
+The scaffold threshold is applied during surface extraction; its stable value
+is 5.0 Å and diagnostic overrides should be recorded with the run manifest.
+
 ## Refinement
 
 Prescript refines by default with external Rosetta. CLI spelling parity did
@@ -272,7 +395,9 @@ Optional minimum score:
 
 The deterministic baseline keeps the best candidates per receptor–ligand
 group. It is an opt-in resource-selection experiment, not established quality
-improvement.
+improvement. For any native-like recovery claim, provide labels from an
+independent native reference and retain its source path plus SHA-256 in the
+comparison ledger.
 
 ### PRODIGY ranking
 

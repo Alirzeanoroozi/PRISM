@@ -1,0 +1,51 @@
+# 2026-07-16: 20260716-benchmark55-main-contract
+
+- Event ID: `run_20260716_benchmark55_main_contract`
+- Kind: `run`
+- Source: `tmp/agent/20260716-benchmark55-main-contract`
+- Date evidence: `tmp/agent directory prefix`
+- Recorded status: `no_terminal_status`
+- Excluded vendor/cache files under this source: 0
+
+## Selected evidence paths
+
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_1.err`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_1.out`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_10.err`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_10.out`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_11.err`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_11.out`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_12.err`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_12.out`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_13.err`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_13.out`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_14.err`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_14.out`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_15.err`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_15.out`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_16.err`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_16.out`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_17.err`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_17.out`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_18.err`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_18.out`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_19.err`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_19.out`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_2.err`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_2.out`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_20.err`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_20.out`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_21.err`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_21.out`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_22.err`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_22.out`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_23.err`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_23.out`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_24.err`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_24.out`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_25.err`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_25.out`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_26.err`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_26.out`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_3.err`
+- `tmp/agent/20260716-benchmark55-main-contract/generation-1361649_3.out`

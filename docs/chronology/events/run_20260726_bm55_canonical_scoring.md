@@ -1,0 +1,51 @@
+# 2026-07-26: 20260726-bm55-canonical-scoring
+
+- Event ID: `run_20260726_bm55_canonical_scoring`
+- Kind: `run`
+- Source: `tmp/agent/20260726-bm55-canonical-scoring`
+- Date evidence: `tmp/agent directory prefix`
+- Recorded status: `mixed_recorded_status`
+- Excluded vendor/cache files under this source: 0
+
+## Selected evidence paths
+
+- `tmp/agent/20260726-bm55-canonical-scoring/STATUS.md`
+- `tmp/agent/20260726-bm55-canonical-scoring/audit-full-v2.sbatch`
+- `tmp/agent/20260726-bm55-canonical-scoring/audit-full-v2_1393064.err`
+- `tmp/agent/20260726-bm55-canonical-scoring/audit-full-v2_1393064.out`
+- `tmp/agent/20260726-bm55-canonical-scoring/diagnose-cross-fallback-v1.sbatch`
+- `tmp/agent/20260726-bm55-canonical-scoring/diagnose-cross-fallback-v1_1393691.err`
+- `tmp/agent/20260726-bm55-canonical-scoring/diagnose-cross-fallback-v1_1393691.out`
+- `tmp/agent/20260726-bm55-canonical-scoring/merge-audit-full-v2-repaired-v1.sbatch`
+- `tmp/agent/20260726-bm55-canonical-scoring/merge-audit-full-v2-repaired-v1_1393708.err`
+- `tmp/agent/20260726-bm55-canonical-scoring/merge-audit-full-v2-repaired-v1_1393708.out`
+- `tmp/agent/20260726-bm55-canonical-scoring/merge-audit-full-v2-safe-irmsd-v1.sbatch`
+- `tmp/agent/20260726-bm55-canonical-scoring/merge-audit-full-v2-safe-irmsd-v1_1394260.err`
+- `tmp/agent/20260726-bm55-canonical-scoring/merge-audit-full-v2-safe-irmsd-v1_1394260.out`
+- `tmp/agent/20260726-bm55-canonical-scoring/merge-audit-repair-v1.sbatch`
+- `tmp/agent/20260726-bm55-canonical-scoring/native-assembly-batch-0001.tsv`
+- `tmp/agent/20260726-bm55-canonical-scoring/prepare-full-v2.sbatch`
+- `tmp/agent/20260726-bm55-canonical-scoring/prepare-full-v2_1393026.err`
+- `tmp/agent/20260726-bm55-canonical-scoring/prepare-full-v2_1393026.out`
+- `tmp/agent/20260726-bm55-canonical-scoring/prepare-full.sbatch`
+- `tmp/agent/20260726-bm55-canonical-scoring/prepare-full_1393000.err`
+- `tmp/agent/20260726-bm55-canonical-scoring/prepare-full_1393000.out`
+- `tmp/agent/20260726-bm55-canonical-scoring/ranking-full-v2-repaired-v1.sbatch`
+- `tmp/agent/20260726-bm55-canonical-scoring/ranking-full-v2-repaired-v1_1393757.err`
+- `tmp/agent/20260726-bm55-canonical-scoring/ranking-full-v2-repaired-v1_1393757.out`
+- `tmp/agent/20260726-bm55-canonical-scoring/ranking-full-v2-safe-irmsd-v1.sbatch`
+- `tmp/agent/20260726-bm55-canonical-scoring/ranking-full-v2.sbatch`
+- `tmp/agent/20260726-bm55-canonical-scoring/ranking-repaired-v1.sbatch`
+- `tmp/agent/20260726-bm55-canonical-scoring/repair-score-v1.sbatch`
+- `tmp/agent/20260726-bm55-canonical-scoring/score-batch-0001-v2.sbatch`
+- `tmp/agent/20260726-bm55-canonical-scoring/score-batch-0001-v2_1392974.err`
+- `tmp/agent/20260726-bm55-canonical-scoring/score-batch-0001-v2_1392974.out`
+- `tmp/agent/20260726-bm55-canonical-scoring/score-batch-0001.sbatch`
+- `tmp/agent/20260726-bm55-canonical-scoring/score-batch-0001_1392965.err`
+- `tmp/agent/20260726-bm55-canonical-scoring/score-batch-0001_1392965.out`
+- `tmp/agent/20260726-bm55-canonical-scoring/score-full-v2-retry-v1.sbatch`
+- `tmp/agent/20260726-bm55-canonical-scoring/score-full-v2-retry-v1_1393707.err`
+- `tmp/agent/20260726-bm55-canonical-scoring/score-full-v2-retry-v1_1393707.out`
+- `tmp/agent/20260726-bm55-canonical-scoring/score-full-v2-safe-irmsd-v1.sbatch`
+- `tmp/agent/20260726-bm55-canonical-scoring/score-full-v2-safe-irmsd-v1_1394212.err`
+- `tmp/agent/20260726-bm55-canonical-scoring/score-full-v2-safe-irmsd-v1_1394212.out`

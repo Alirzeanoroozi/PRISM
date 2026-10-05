@@ -1,5 +1,13 @@
 # Summary
 
+## Benchmark presentation update — 2026-10-01
+
+- `docs/PRISM-benchmark.pptx` now has 34 slides. The original 21-slide deck is preserved as `docs/PRISM-benchmark.pre-20261001.pptx`.
+- Group pages distinguish 257 BM5.5 complexes, 161 pair-summary rows, and 565 DockQ-scored model rows. The September extension separates identity controls, the six-case filter diagnostic, the 257-case candidate-overlap ledger, and historical results.
+- Seven new 1s78/1e6j PyMOL PNGs and matching `.pse` sessions are in `tmp/agent/20261001-prism-benchmark-slides/figures/`; the figure generator is in the framework run workspace. The 1s78 control includes TM-align self scores A=1.000 and D=0.951, DockQ=0.874; the within-case 1e6j comparison shows lower PyRosetta total score with much lower DockQ.
+- The presentation was extended to 39 slides on 2026-10-01. It now reports the earlier 88-complex prediction counts alongside September candidate-row counts and includes a six-case DockQ/energy ranking-reversal table. Examples include TM-align baseline 1e6j H–P (+371.03 / DockQ 0.0054 versus +405.50 / 0.9776), TM-align relaxed 1ahw A–F (+1842.21 / 0.0165 versus +2306.29 / 0.5344), and GT-align relaxed 2igs A–D (−82.26 / 0.0059 versus +220620.67 / 0.1269). These are observational ranking mismatches between different metrics.
+- A 40th slide now isolates low-energy, poor-DockQ poses: TM-align baseline 1e6j H–P (+371.03 / 0.0054), TM-align relaxed 2i25 N–O (−305.60 / 0.0301), GT-align relaxed 2igs A–D (−82.26 / 0.0059), plus 1s78, 1e6j, and 2fd6 examples. It includes available 2i25 PyMOL figures from the September figure set.
+
 ## Summary
 
 PRISM-prescript is the current Python 3 PRISM docking pipeline and its
@@ -19,9 +27,6 @@ pipeline.
 
 - Ongoing concept learning uses `mentoring-juniors` for Socratic guidance and
   `teach` for persistent lessons, reference material, and learning records.
-- The deleted learnship learning skill is not part of the user's teaching
-  workflow. This preference does not change the project's separate task
-  planning or routing instructions.
 
 ## Current working status
 
@@ -247,6 +252,34 @@ pipeline.
   attrition; downstream transform/clash behavior and native quality remain
   open.
 
+## Transformation attrition diagnosis (2026-08-29)
+
+- Question: why do many structural-alignment files get removed after the
+  transformation step? Evidence from the retained `1gte` GTalign+PyRosetta run
+  (`tmp/agent/20260823-1gte-variant-runs/current/`, job 1593611, 19,062
+  templates, queries 1gteA/1gteB):
+  - Alignment stage writes only hits that already pass its own pre-filter
+    (`src/alignment_gtalign.py`): `tm_score >= PRISM_GTALIGN_PRE_SCORE` (default
+    0.0) AND `match_count >= 15`. Result: 2,997 JSON files, ALL `status=success`,
+    ALL `tm_score >= 0.501`. So the alignment stage is the first real filter.
+  - Transformation threshold gate (`alignment_passes_thresholds` in
+    `src/transformation.py`: match_count>=15, tm>=0.5, match_pct>50/30) removes
+    ZERO of the present files — replay over all 574 present sides: 0 failures.
+  - The dominant removal is the CLASH filter (`pair_has_acceptable_clashes`,
+    `CLASHING_DISTANCE=3`, `MAX_CLASHING_COUNT=5`): of 560 transformed pairs
+    (o1 287 + o2 273), 489 (87%) are rejected, median 99 CA clashes, min inter-CA
+    distance as low as 0.34 A. Only 71 pairs pass (matches run.log "Passed pairs
+    71").
+  - 1,877 of 2,997 alignment files (62.6%) are ORPHANS: a hit on one query side
+    with no passing hit on the partner side, so they never form a pair. 1,540
+    orphans have the other query hitting the same template+chain (orientation
+    mismatch), 337 have no partner hit at all.
+- Interpretation: the "removal after transformation" is mostly (a) the alignment
+  pre-filter deciding which hits exist, and (b) the clash filter rejecting
+  geometrically overlapping placements. The transformation threshold gate is not
+  the bottleneck for TMalign/GTalign. This is a diagnostic observation, not a
+  threshold-change authorization.
+
 ## Required resources and path contract
 
 Run from an isolated workspace that contains (normally as symlinks) `prism.py`,
@@ -264,6 +297,17 @@ The canonical smoke launcher creates this layout automatically:
 | Outputs and scoring | `processed/{alignment,alignment_gtalign,transformation,rosetta_refinement,pyrosetta_refinement,fiberdock_refinement}`; `benchmark/prism_processed/env/prism_score_env/bin/python` | Score assembled refined models only; preserve raw scorer JSON and mapping/hash provenance. The former `/scratch/tmp/prism-dockq-env/bin/python` is stale and unavailable for DockQ. |
 | Visualization | `/home/rshadi25/.local/bin/uv`; `pymol-open-source-whl` 3.1.0.4 with NumPy 1.26.4 resolved by `uv run` | Headless OSMesa rendering works after dependency staging; preserve both PNG and `.pse` session. Do not assume PyMOL is installed in `gtalign_env`. |
 
+### Demo notebook and hotspot checking
+
+- The available isolated feature-bundle demo is
+  `/scratch/tmp/prism-prescript-pipeline-extension-clean/notebooks/prism_pipeline_demo.ipynb`.
+  It uses the verified `gtalign_env` interpreter, defaults to read-only analysis
+  of retained runs and artifacts, and makes expensive pipeline execution opt-in.
+- In the current transformation code, `hotspot_analysis()` delegates to
+  `evaluate_hotspots()` in `published_protocol` mode and requires at least one
+  matched hotspot. `geometry_only_experimental` mode bypasses the hotspot gate.
+  Hotspot/contact asset parity remains an unresolved protocol-validation issue.
+
 For clean Slurm scoring, use the verified repository-local entry path
 `benchmark/prism_processed/env/prism_score_env/bin/python`; verify `import
 DockQ` before submission. The former `/scratch/tmp/prism-dockq-env/bin/python`
@@ -278,14 +322,22 @@ Important runtime controls: `PRISM_INPUTS_CSV`, `PRISM_FILTER_MODE`,
 
 ## Knowledge-graph status
 
-The broad `graphify-out/graph.json` received a code-only incremental update on
-2026-07-25 (208,846 nodes, 337,510 links, 11,852 communities). Its exported
-report/corpus metadata remains stale and its IDs predate Graphify #1504, so
-treat it as navigation only—not authority for exact paths or execution
-decisions. A chronology rebuild must retain the run notes, manifests, status
-files, and logs under `tmp/agent`; exclude only copied environments, vendored
-dependencies, caches, and self-generated Graphify corpora within those run
-directories. Explicitly decide that filtered scan scope before rebuilding.
+The current `graphify-out/` navigation graph was rebuilt on 2026-09-17 from
+the maintained `src/` tree only: 47 code files, 584 nodes, 1,113 edges, and
+26 communities. The graph-health audit found zero missing or dangling
+endpoints, self-loops, duplicate-edge collapse, or unresolved endpoint groups.
+No LLM backend was configured, so community names remain deterministic hub or
+`Community N` labels; this is an architecture-navigation artifact, not
+scientific or execution authority.
+
+The former broad graph (208,846 nodes, 337,510 links, 11,852 communities)
+is historical and stale for exact path discovery. The full checkout was not
+used for this rebuild because generated benchmark/history trees and copied
+environments make an unfiltered graph noisy and impractical. A future
+evidence/chronology graph must retain dated run notes, manifests, status files,
+and logs under `tmp/agent` while excluding copied environments, vendored
+dependencies, caches, and self-generated Graphify corpora; its filtered scope
+must be decided explicitly before rebuilding.
 
 `docs/chronology/` is now the separate, deterministic chronology graph: 167
 dated events across 22 calendar dates, with 199 nodes and 360 directed edges.
@@ -682,16 +734,130 @@ The `run.slurm` defaults to `cosbi` partition, 8 CPUs, 40GB, 72h.
   tm_score_contract metadata ("multiprot_kabsch_rmsd_proxy" vs "standard_length_normalized").
 
 - **Alignment adapter interface contract** (identified during architecture exploration):
-  Three alignment adapters (TMalign, GTalign, MultiProt) write JSON to processed/alignment/
-  with no shared schema. `tm_score` field means different things per aligner (native TM,
+  Three alignment adapters (TMalign, GTalign, MultiProt) write JSON with no shared
+  schema. `tm_score` field means different things per aligner (native TM,
   native TM, proxy TM). Duplicate `extract_chain_and_res_ids()` in alignment.py (L176)
-  and alignment_gtalign.py (L159). GTalign symlink hack makes processed/alignment stateful
-  (points to last run). Next: define formal AlignmentResult protocol (Pydantic/JSON schema),
-  consolidate chain/residue extraction into shared utility, remove GTalign symlink statefulness,
-  add tm_score_contract field to all alignment outputs.
+  and alignment_gtalign.py (L159). Next: define formal AlignmentResult protocol (Pydantic/JSON
+  schema), consolidate chain/residue extraction into a shared utility, and add a
+  `tm_score_contract` field to all alignment outputs.
+  **Resolved 2026-08-06**: the GTalign symlink hack is removed; each aligner now
+  writes to its own run-scoped directory
+  (`processed/alignment_{tmalign,gtalign,multiprot}/<run_id>/`), so
+  `processed/alignment` is no longer a shared/stateful path. See "Pipeline run commands"
+  below.
+
+## Pipeline run commands
+
+Run from an isolated workspace that contains (normally as symlinks) `prism.py`,
+`src/`, `external_tools/`, `templates/`, `inputs.csv`, and `processed/pdbs/`.
+The canonical smoke launcher creates this layout automatically. Verified pipeline
+interpreter (Python 3.11, Biopython, NumPy, PyRosetta, GTalign):
+
+```bash
+PY=/home/rshadi25/.conda/envs/gtalign_env/bin/python
+```
+
+### Smoke / health check
+A completed zero-pair smoke is a health check, not a biological-positive result.
+
+```bash
+PRISM_PIPELINE_PYTHON=/home/rshadi25/.conda/envs/gtalign_env/bin/python \
+  bash benchmark/scripts/run_prism_pipeline_smoke.sh
+```
+
+### Core run commands (verified 2026-08-06)
+Defaults: `--aligner tmalign`, `--refiner external_rosetta`, surface `naccess`,
+refine on. Each aligner writes to its own run-scoped directory; no shared
+`processed/alignment` and no GTalign symlink hack.
+
+```bash
+# Baseline: TMalign + PyRosetta (no external module; plumbing/diagnostic)
+$PY prism.py --aligner tmalign --refiner pyrosetta --no-refine --template-limit 10
+
+# External Rosetta (requires module + PRISM_ROSETTA_* env before launch)
+module load rosetta/2022.42
+export PRISM_ROSETTA_PREPACK="/opt/ohpc/pub/apps/rosetta/rosetta_bin_linux_2022.42_bundle/main/source/bin/docking_prepack_protocol.static.linuxgccrelease"
+export PRISM_ROSETTA_DOCK="/opt/ohpc/pub/apps/rosetta/rosetta_bin_linux_2022.42_bundle/main/source/bin/docking_protocol.static.linuxgccrelease"
+export PRISM_ROSETTA_DB="/opt/ohpc/pub/apps/rosetta/rosetta_bin_linux_2022.42_bundle/main/database/"
+$PY prism.py --aligner tmalign --refiner external_rosetta
+
+# FiberDock (tangled external binary; runs pair-by-pair, slow)
+$PY prism.py --aligner tmalign --refiner fiberdock
+
+# MultiProt (only PyRosetta supported; 32-bit binary, needs unrestricted runtime)
+$PY prism.py --aligner multiprot --refiner pyrosetta
+
+# GTalign CPU / GPU (absolute paths; never treat CPU/GPU output as interchangeable)
+$PY prism.py --aligner gtalign --gtalign_path /home/rshadi25/.conda/envs/gtalign_env/bin/gtalign_cpu
+$PY prism.py --aligner gtalign --gtalign_path /home/rshadi25/.conda/envs/gtalign_env/bin/gtalign_gpu
+
+# FreeSASA surface backend (drop-in for NACCESS)
+PRISM_SURFACE_BACKEND=freesasa $PY prism.py --aligner tmalign --refiner pyrosetta
+
+# Optional stages: candidate ranking before refinement; DockQ eval after refinement
+$PY prism.py --aligner tmalign --refiner pyrosetta --rank --top-k 1 --rank-method baseline
+$PY prism.py --aligner tmalign --refiner pyrosetta --compare --compare-jobs 4
+```
+
+### Relaxed thresholds for smoke / diagnostic runs (never production defaults)
+GTalign TM-scores are systematically lower than TMalign, so it needs lower
+thresholds to admit the same candidates.
+
+```bash
+export PRISM_TM_SCORE_THRESHOLD=0.2                # TMalign; use 0.1 for GTalign
+export PRISM_MINIMUM_RESIDUE_MATCH_COUNT=4
+export PRISM_CLASHING_DISTANCE=2.0
+export PRISM_MAX_CLASHING_COUNT=10
+export PRISM_MINIMUM_RESIDUE_MATCH_PERCENTAGE=20   # TMalign; use 10 for GTalign
+export PRISM_GTALIGN_PRE_SCORE=0.05                # lower GTalign pre-filter for more hits
+```
+
+Stable production defaults (documented in `docs/STABLE_PIPELINE.md`) are
+TM=0.5, minimum matches=15, match percentage=50, difference allowance=20,
+clash distance=3, maximum clashes=5.
+
+### Key runtime env controls
+`PRISM_INPUTS_CSV`, `PRISM_FILTER_MODE`, `PRISM_TMALIGN`, `PRISM_GTALIGN_PRE_SCORE`,
+`PRISM_MULTIPROT`, `PRISM_FIBERDOCK_DIR`, `PRISM_SURFACE_BACKEND`,
+`PRISM_FREESASA_PYTHON`, `PRISM_NACCESS_EXECUTABLE`, `PRISM_STAGE_STATUS_PATH`,
+`PRISM_ROSETTA_*` (see above). Ranking-only: `PRISM_RANK`, `PRISM_TOP_K`,
+`PRISM_RANK_MIN_SCORE`, `PRISM_CANDIDATE_AUDIT_PATH`.
+
+### Isolated output directories (per-tool, since 2026-08-06)
+- `processed/alignment_tmalign/<run_id>/`, `processed/alignment_gtalign/<run_id>/`,
+  `processed/alignment_multiprot/<run_id>/`
+- `processed/pdbs/` (download), `processed/surface_extraction/`,
+  `processed/transformation/`, `processed/candidate_audit/<run_id>.jsonl`,
+  `processed/ranking/prodigy/`
+- Refiners each keep their own root: `processed/rosetta_refinement/`,
+  `processed/pyrosetta_refinement/`, `processed/fiberdock_refinement/`
+- `processed/compare/` (DockQ native cache)
 
 ## Chats
 
+### PRISM-prescript architecture graph
+- Main work: Rebuilt the bounded source architecture graph and verified its graph-health audit.
+- Last bold steps: none explicitly marked
+- Durable updates: updated graph scope in `summary.md`, `decisions.md`, and `open_questions.md`.
+- Key files or outputs: `graphify-out/graph.json`, `graphify-out/GRAPH_REPORT.md`, `graphify-out/graph.html`
+
+### notebook and hotspot checking - 2026-08-21
+- Main work: Located the isolated PRISM feature-bundle demo notebook and documented the current transformation hotspot gate.
+- Last bold steps: none explicitly marked
+- Durable updates: summary.md and decisions.md; no new open question because existing hotspot/contact parity coverage is sufficient.
+- Key files or outputs: `tmp/prism-prescript-pipeline-extension-clean/notebooks/prism_pipeline_demo.ipynb`, `src/transformation.py`, `src/template_filtering.py`
+
+### Local runnable PRISM feature bundle - 2026-08-16
+- Prepared `/scratch/tmp/prism-prescript-pipeline-extension-clean` as a local-only frozen-case bundle with TMalign, MultiProt, FiberDock, NACCESS, `1kcaCH` template assets, and `1FGNH`/`1TFHA` inputs.
+- Added preflight, isolated-run, Slurm matrix, interactive guidance, asset hashes, and read-only `origin/main` comparison helpers.
+- Validation: 77 tests pass after a PyRosetta vector compatibility regression fix. Jobs 1506810, 1506813, and 1506819 confirmed TMalign, GTalign CPU/GPU execution, MultiProt execution under `Seccomp: 0`, baseline ranking, explicit PyRosetta refinement, and FiberDock refinement. PRODIGY is absent. The legacy-named `external_rosetta` path exposed PyRosetta API drift; corrected rerun job 1506821 is pending.
+
+
+### Pipeline run commands
+- Main work: Captured durable per-tool run commands for all PRISM pipeline variants and removed the shared/GTalign-symlink `processed/alignment` path in favor of per-tool, per-run isolated output directories.
+- Last bold steps: **Test TMalign/GTalign/MultiProt alignment isolation**; **Verify refinement tools functional**
+- Durable updates: summary.md (new "Pipeline run commands" section + Chats entry; corrected the GTalign-symlink note to resolved); open_questions.md (marked alignment symlink statefulness resolved).
+- Key files or outputs: `prism.py`, `src/alignment.py`, `src/alignment_multiprot.py`, `src/alignment_gtalign.py`, `src/pyrosetta_refinement.py`, `tests/test_prism_cli.py`.
 
 ### Graphify
 - Main work: Graphify codebase analysis (462 nodes, 956 edges, 26 communities), implemented ranking/progression system with composite confidence scoring, and integrated full PRISM-prescript features into PRISM-main-archive on feature branches while keeping main clean.
@@ -750,3 +916,939 @@ The `run.slurm` defaults to `cosbi` partition, 8 CPUs, 40GB, 72h.
 - Key files or outputs: `prism.py`, `src/pdb_download.py`,
   `src/alignment_multiprot.py`, `tests/test_prism_cli_parity.py`,
   commit `20ebf4c3cc3`.
+
+### MultiProt legacy-compatible mode - 2026-08-11
+- Main work: Added an opt-in compatibility path in the current MultiProt
+  adapter that preserves legacy interface/query order, optional `params.txt`,
+  `Reference Molecule`, `Trans`, and three solver solutions; downstream
+  transformation now evaluates retained solution variants.
+- Validation: Slurm job 1495420 on `rk01` (`Seccomp: 0`) produced 8/8 current
+  adapter successes with 3 solutions each. Post-change default mode job
+  1495424 retained its previous 1/8 Kabsch result. Downstream variant smoke
+  job 1495430 produced six transformed PDBs from the retained solutions.
+- Key files: `src/alignment_multiprot.py`, `src/transformation.py`, `prism.py`,
+  `tests/test_multiprot_legacy_compat.py`, `CHANGELOG.md`.
+
+### Matched MultiProt compatibility panel - 2026-08-12
+- Main work: Ran the current `legacy_compatible` adapter and the legacy
+  Python-2 adapter on the same normalized 770-template panel (10 batches of
+  77) for pairs `1cew/2ghuD` and `2uwjG/2uwjE`. Current job 1496043 and the
+  corrected legacy-only job 1496073 used identical MultiProt binary hashes,
+  the exact legacy `params.txt`, and isolated batch workspaces.
+- Validation: 6,160 records and keys per arm; 6,157 successful sides and
+  three no-solution/unavailable sides per arm; 6,026 successful records had
+  exact retained solution payloads. Focused compatibility/parsing tests passed
+  (`11 passed`).
+- Finding: native current and legacy interface files are not semantically
+  identical across the panel (16 residue-key-set differences and 27 CA
+  coordinate-different sides among 1,540). A six-template serial probe matched
+  21/48 with native current assets but 48/48 when legacy interface contents
+  were staged under current filenames. This supports an asset-content cause on
+  the probe, not a general downstream equivalence claim.
+- Evidence: `tmp/agent/20260811-multiprot-compat-panel/aggregate/`, with
+  `comparison.md`, `summary.json`, `record_comparison.tsv`, and
+  `asset_parity.json`; Terra verdict: PASS WITH CAVEATS.
+
+### Full legacy-interface asset replay - 2026-08-12
+- Main work: Ran the current `legacy_compatible` MultiProt adapter across the
+  same 770-template, 10-batch panel using the legacy interface contents staged
+  under the current `*_int.pdb` filenames. The run used isolated per-batch
+  roots and Slurm job 1496281 on `ai01`; the redundant `kutem` copy 1496273
+  was canceled while pending.
+- Validation: 6,160 records and keys overlapped the corrected legacy run;
+  6,157 successful solution payloads matched exactly across solution count,
+  solution number, match count, reference molecule, `Trans`, and
+  `match_dict`; max `Trans` difference was 0.0. The same three no-solution
+  keys were retained, with current status `alignment_unavailable` versus
+  legacy status `no_solution`. All current subprocess return codes were zero.
+- Asset audit: 1,540 interface sides were audited file-wise. 1,305 had exact
+  atom identities, 3 had coordinate differences (maximum 73.887 A), and all
+  1,540 differed in B-factors; semantic exactness was therefore zero under the
+  audit's identity-plus-numeric-field definition. Both MultiProt binaries and
+  the exact legacy params file had matching SHA256 hashes.
+- Evidence: `tmp/agent/20260812-multiprot-legacy-assets-full/aggregate/`,
+  `asset_audit.json`, `manifest.json`; focused tests passed (`11 passed`).
+  Terra verdict: PASS WITH CAVEATS. This establishes adapter-level
+  equivalence conditional on legacy interface contents, not downstream
+  transformation, FiberDock, DockQ, ranking, or scientific equivalence.
+
+### Multiprot-fix & pipeline check - 2026-08-13
+- Main work: Checked current executable, environment, pipeline, and benchmark
+  readiness without launching a benchmark or modifying source.
+- Validation: `gtalign_env` imports Python 3.11, Biopython, NumPy, pandas,
+  PyRosetta, and FreeSASA; the repository-local scoring environment imports
+  DockQ; TMalign, GTalign CPU/GPU, MultiProt, NACCESS, and FiberDock binaries
+  are present; focused CLI/transformation/MultiProt/FiberDock checks passed
+  (`12 passed`). Rosetta 2022.42 is available as a module and must be loaded
+  explicitly in Slurm jobs.
+- Readiness boundary: the stable benchmark baseline is current TMalign +
+  NACCESS + external Rosetta. GTalign CPU/GPU equivalence, complete current
+  MultiProt end-to-end validation, and causal current-versus-legacy FiberDock
+  comparison remain separate validation arms.
+- The working tree contains extensive generated and untracked benchmark state;
+  full benchmarks require an explicit frozen source/assets/environment
+  manifest. The local Slurm controller was unreachable from the active shell,
+  so scheduler state was not inferred.
+- Last bold steps: none explicitly marked
+- Durable updates: summary.md, decisions.md, and open_questions.md
+- Key files: `docs/STABLE_PIPELINE.md`, `prism.py`,
+  `src/fiberdock_refinement.py`, `tests/test_fiberdock_output_contract.py`
+
+### Transformation gate ablation notebook - 2026-08-23
+- Added and executed `notebooks/transformation_gate_ablation.ipynb` as a
+  diagnostic companion for the frozen
+  `/scratch/tmp/prism-prescript-pipeline-extension-clean/runs/20260816T121957Z-tmalign`
+  case with canonical `new_template/template` assets.
+- The notebook preserves both candidate orientations in a nine-gate ledger,
+  reports independent outcomes, cumulative diagnostic attrition, current
+  production-order replay, leave-one-gate-out rescues, and a descriptive
+  one-variable TM-score sensitivity table. It does not alter production code
+  or defaults.
+- In the retained case, both orientations pass data availability, transform
+  fields, minimum matches, interface coverage, hotspot mapping, complementary
+  contacts, and transformation materialization. Both fail the current
+  TMalign TM-score threshold of 0.5; `o2` additionally has 29 C-alpha clashes
+  under the current `<3 A`, reject-at-5 contract, while `o1` has zero.
+- The notebook now includes a visible `gte_against_1h7x` selector for
+  receptor `1gteA`, ligand `1gteB`, and template `1h7xCD` with chains C/D.
+  Selecting that case activates an opt-in preparation cell that writes the
+  pair manifest, stages canonical interface/filter assets, invokes the
+  downloader and TMalign pipeline in an isolated run root, and points the
+  ledger at the generated alignment directory. The earlier GTalign attempt is
+  retained as failed evidence; the notebook does not silently treat it as a
+  completed alignment run.
+
+### Full 1gteA/1gteB three-arm execution - 2026-08-23
+- Authoritative Slurm job `1593611` is running in
+  `tmp/agent/20260823-1gte-variant-runs/` with full default template panels.
+- The current GTalign/PyRosetta arm has completed input, alignment, and
+  transformation filtering; PyRosetta refinement remains active. The legacy
+  MultiProt/FiberDock and TMalign/Rosetta arms are sequentially pending in the
+  same controller job.
+- Jobs `1593591` and `1593599` are setup-diagnostic evidence only: the first
+  exposed incorrect symlinked workspace paths; the second was canceled after
+  exposing missing canonical current template assets. Neither is a biological
+  result.
+
+### Parameterized orientation comparison controls - 2026-09-09
+- Added current-CLI template selection through `--templates` or
+  `--template-list`, with six-character ID validation and post-selection
+  `--template-limit` behavior. Explicit panels no longer require opening the
+  default template manifest.
+- Added `src/transformation_config.py` with typed, environment-compatible
+  transformation thresholds. CLI overrides now reach alignment prefiltering
+  where applicable and all transformation, contact, hotspot, coverage, TM,
+  and C-alpha clash gates.
+- `--inputs-csv` is now propagated to both input download and transformation;
+  the transformation stage clears per-call accumulators so sequential notebook
+  arms do not mix candidates.
+- Extended `notebooks/orientation_orphan_diagnostic.ipynb` with an opt-in
+  current-pipeline runner for the no-option native default and explicit `o1`
+  / `o2` arms, isolated run roots, stage-status/audit paths, command previews,
+  and threshold-sweep planning. The notebook was executed successfully with
+  31 cells and execution disabled for pipeline arms.
+- Added the focused `notebooks/pipeline_orientation_comparison.ipynb`, whose
+  separate guarded cells invoke the current CLI for native-default, `o1`, and
+  `o2` in isolated roots. Its 12-cell disabled path executed successfully.
+- MultiProt match/coverage filtering now uses the chain-specific template
+  interface size as the coverage denominator; the maintained function
+  inventory was regenerated after the API changes.
+- Focused validation passed: 64 tests; full-suite execution remains a
+  separate check because the pre-existing broad suite previously stalled.
+
+### Stepwise orientation reliability notebook - 2026-09-10
+- Added `src/stepwise_analysis.py` and extended
+  `notebooks/pipeline_orientation_comparison.ipynb` to implement the full
+  recommended diagnostic order: frozen baseline, input/asset parity,
+  alignment/pairing provenance, independent and leave-one-gate-out ledgers,
+  clash distance/event replay, refinement evidence validation, same-set
+  ranking metrics, and a separate US-align preflight/contract check.
+- The notebook records explicit `unknown`, `deferred`, `mixed`, and
+  `not_available` states rather than treating missing evidence as success.
+  Pipeline and clash execution remain opt-in.
+- Added raw-output hashes and subprocess return-code fields to TMalign and
+  MultiProt alignment JSONs. Added the `--scaffold-threshold` override while
+  retaining the stable 5.0 Å default.
+- Validation: the 28-cell notebook executed successfully in a temporary
+  `gtalign_env` kernel with `RUN_PIPELINES=False`; stepwise helper tests passed
+  along with the focused pipeline suite. No biological comparison was run.
+
+### Final audit hardening - 2026-09-10
+- Added interface-list JSON provenance because the transformation stage uses
+  `templates/interfaces_lists/<template>.json` for chain-specific coverage.
+  Consumed assets are classified by resolved path and reference-byte hash;
+  copied/renamed assets are detected and missing consumed assets remain
+  unresolved rather than being inferred as current.
+- Alignment inventory now reports contract status for each partner. Gate
+  replay forces alignment-dependent gates to `unknown` when status, return
+  code, required fields, or raw-output hashes are incomplete; a parseable JSON
+  record cannot create a cumulative pass by itself.
+- Ranking recovery is fail-closed unless the pre-ranking panel matches
+  exactly and the native labels have source, source hash, and deterministic
+  mapping-hash provenance. PRODIGY affinity remains a ranking input only.
+- Final software validation: 74 focused tests passed and 1 skipped; Python
+  compilation, notebook schema/AST checks, and the 28-cell notebook disabled
+  execution passed (18 code cells, zero notebook errors). No biological arm
+  was launched in this implementation cycle.
+
+### Cross-repository workflow hardening - 2026-09-12
+
+- Both dirty repositories were frozen under
+  `tmp/agent/20260912-workflow-freeze-retry1/` with status, commit/branch,
+  tracked diff, index diff, changed paths, benchmark roots, binary hashes, and
+  cluster state. The prescript untracked-path manifest is retained as a gzip
+  artifact because nested generated environments expanded it to 256 MB.
+- The maintained boundary is recorded in
+  `docs/adr/0003-prism-repository-boundary.md`: PRISM-prescript owns the
+  maintained CLI, provenance, benchmark, and scientific evidence; PRISM is a
+  reviewed experimental feature source; the legacy MultiProt/FiberDock tree
+  remains reference-only.
+- PRISM documentation consistency and transformation invariants were repaired.
+  The full PRISM hermetic suite passed 69 tests with compilation and diff
+  checks.
+- Prescript provenance validation now emits controlled fail-closed JSON for
+  duplicate ledgers, accepts `--output` as an alias for `--out`, and has
+  regression coverage for mutated artifacts, duplicate primary keys, and
+  secret sentinels. The focused prescript suite passed 63 tests.
+- The broad prescript suite reached 109 passed and 2 skipped before being
+  interrupted after 63 seconds in
+  `benchmark/scripts/build_matched_benchmark_manifest.py`; it is not a full
+  suite pass. The exact stall remains an open validation issue.
+
+### Cross-repository smoke and provenance completion - 2026-09-12
+
+- PRISM now has restored guidance documentation, an explicit backend contract,
+  orientation-safe transformation regression coverage, and observable DockQ
+  command metadata. Its full hermetic suite passes 70 tests.
+- PRISM-prescript now accepts a declared expected artifact inventory in TSV or
+  JSON, returns nonzero for warning/fail consumer gates, rejects malformed or
+  duplicate ledgers in controlled JSON, and records terminal skipped
+  refinement events for no-candidate and no-refinement runs.
+- Run identity manifests record attempt ID, output root, command, bounded
+  dirty-tree/source hashes, Slurm array metadata, safe environment identity,
+  template file hashes when a template directory is explicitly supplied, and
+  executable identity without serializing credentials.
+- Focused prescript validation passed 67 tests; compilation and shell syntax
+  checks passed. The broad suite remains incomplete after the known stall at
+  benchmark/scripts/build_matched_benchmark_manifest.py:58.
+- Stable TMalign smoke job 1658925 exited 0 with all stages terminal and zero
+  candidates. GTalign CPU job 1658928 and GPU job 1658929 each exited 0 with
+  four raw-hashed alignment records and zero candidates; their score/match
+  differences remain unresolved.
+- Optional backend job 1658926 succeeded for PyRosetta and FiberDock in an
+  isolated copied FiberDock workspace. DockQ was attempted through
+  DOCKQ_PYTHON but failed because the installed compiled extension is
+  incompatible with NumPy 2.4.6.
+
+### Cross-repository validation update - 2026-09-12
+
+- The first full-suite attempt was conservatively interrupted while the
+  matched-benchmark-manifest test was still running. That test was isolated
+  and passed all four cases in 23.03 seconds.
+- After repairing the dirty benchmark evaluator's explicit-chain, repository-
+  root, and JSON-output contracts, the complete prescript suite passed
+  `344 passed, 6 skipped` in 122.94 seconds. One warning records that the
+  installed SciPy build expects NumPy below 2.3; this is separate from the
+  DockQ compiled-extension failure.
+- `tests/test_model_output_integrity.py` now passes 6/6. Invalid raw chain
+  contracts fail closed before either scorer, explicit mappings are honored,
+  and multi-interface DockQ JSON does not promote the first interface's
+  metrics to model-level fields.
+- The explicit DockQ replay is preserved under
+  `tmp/agent/20260912-dockq-replay/` with job `1658930`, status `failed`, and
+  return code `1`; the NumPy ABI issue remains an evaluator blocker.
+- A bounded run-identity smoke under
+  `tmp/agent/20260912-run-identity-smoke/` passed with a one-file template
+  inventory. Recursive hashing of the repository's symlinked template tree
+  was stopped before output and remains unsafe without an explicit bounded
+  inventory.
+- Runtime-manifest validation passed. The global prescript diff check remains
+  blocked by six modified benchmark CSV first-line whitespace records and one
+  trailing-space line in `src/rosetta_refinement.py`; generated evidence was
+  not rewritten.
+- Controlled orientation notebook job `1658931` ran native-default, `o1`, and
+  `o2` with the same input CSV, one verified template, TMalign, stable
+  thresholds, and `--no-refine`. All three input/alignment/transformation
+  stages completed; native default had two alignment-threshold rejections and
+  each fixed orientation had one. Refinement was terminally skipped. The job
+  was canceled during notebook provenance post-processing because the asset
+  hash index was traversing the large template/reference tree; partial arm
+  evidence is preserved under `tmp/agent/20260912-orientation-study/`.
+
+### Repository-local DockQ runtime replay - 2026-09-12
+
+- The repository contains a usable scoring environment at
+  `benchmark/prism_processed/env/prism_score_env/`. Its Python module entry
+  point imports DockQ `2.1.3` with NumPy `1.26.4` and completed on Slurm job
+  `1658942` using the `kutem` account/QOS on `rk01`.
+- The standalone `bin/DockQ` file has a stale shebang pointing to the sibling
+  `PRISM` tree. Use the environment's explicit `bin/python -m DockQ` invocation
+  or the canonical scoring adapter instead; do not repair or mutate the copied
+  environment in place.
+- The isolated replay root is
+  `tmp/agent/20260912-dockq-repo-env/`. Both raw DockQ and
+  `benchmark/scripts/score_single_prism_pair.py` returned zero with mapping
+  `OA:GF` and score `0.2116967149685021`. Raw metrics were fnat `0.2105263`,
+  iRMSD `4.5240`, LRMSD `12.2353`, F1 `0.2807`, and zero clashes; the adapter's
+  auxiliary iRMSD was `4.476`.
+- The model/native hashes, raw JSON hash, commands, environment observation,
+  Slurm logs, and terminal status are retained in that run root. This is
+  evaluator/wiring evidence for one prior model/native pair, not evidence that
+  the model is biologically successful or that ranking improves quality.
+- `src/eval/dockq.py` now honors an explicit `DOCKQ_PYTHON` path by invoking
+  that interpreter as a module and preserving the entry path. Focused tests
+  passed (`11 passed` across DockQ runtime, compare, and model-output
+  integrity). Pipeline integration job `1658943` ran the real `gtalign_env`
+  process with the repository-local override and reproduced the same score.
+- `benchmark/scripts/score_single_prism_pair.py` now exposes its existing
+  `--dockq-json-dir` capability at the CLI. Job `1658944` retained one raw
+  `model_1glcFG.dockq.json` file in a fresh run root with return code 0 and
+  the same DockQ score; this closes the documentation/CLI mismatch without
+  changing stable scoring defaults.
+
+### USalign manual validity pilot - 2026-09-21
+
+- The production USalign array was canceled before debugging; no replacement
+  job was submitted. A bounded manual pilot used three single-chain interface
+  pairs from `templates_test`.
+- TMalign wall times were 0.017-0.024 s, USalign default 0.043-0.051 s,
+  USalign `-fast` 0.042-0.046 s, and MultiProt 0.037-0.048 s. All calls
+  returned zero; MultiProt produced `2_sol.res` and Largest Solution values
+  37, 16, and 15. The local environment therefore does not reproduce a large
+  USalign speed advantage over MultiProt.
+- The parser regression now recognizes USalign `Structure_1/Structure_2`
+  labels and accepts explicit `aligner_name`; the focused alignment module
+  passes 8 tests. The compatibility `tm_score` remains the maximum of both
+  normalized scores, so strict reference-normalized scoring remains open.
+
+### PRISM aligner comparison recovery - 2026-09-28
+
+- The selected comparison workstream is `/scratch/rshadi25/GitHub/PRISM-prescript`.
+  The compact historical 19,855-template package is retained under
+  `benchmark/prism_processed_results/prism_aligner_comparison_20260928/compact_historical_19855/`.
+- Exact panel evidence is now copied compactly under
+  `benchmark/prism_processed_results/prism_aligner_comparison_20260928/exact_panel_evidence/`.
+  It freezes 19,948 checked, 19,062 calculated, 19,058 materialized, and
+  historical 19,855 panel identities with hashes and exclusions.
+- The shared parser now preserves `tm_score_query`, `tm_score_ref`, and an
+  explicit reference-normalized Structure_2 contract. Focused parser,
+  contract, and worker-sweep tests pass (`18 passed` in the latest combined
+  run); identical real TMalign/USalign inputs also passed the mapping,
+  transform, RMSD, and dual-score gate.
+- Exact current-panel alignment-only artifacts are reusable but not quality
+  evidence: jobs 1659356/1659358 (GTalign), 1659448/1659449 (TMalign), and
+  1659360/1659361 (USalign). They have no common transformation/filtering,
+  ranking, refinement, or DockQ outputs.
+- Corrected USalign worker/configuration sweep job 1708928 completed and passed
+  all 10 configurations (default/`-fast` × 1/2/4/8/16 workers), each with
+  1,892/1,892 records and zero execution failures. Default/16 reached
+  105.337 records/s; `-fast`/16 reached 110.677 records/s but changed
+  1,385 mappings/scores and 1,306 transforms, so default/16 is selected.
+  Compact evidence is under `benchmark/prism_processed_results/prism_aligner_comparison_20260928/usalign_pilot_946/`.
+- The earlier wrapper-only attempt 1708915 is preserved with its explicit
+  serial-dispatch invalidation reason; its raw records/scratch were cleaned
+  after the failure status was recorded.
+- USalign historical-panel production array 1708992 is running on VALAR
+  `kutem` as a documented fallback while KUACC remains at the per-user
+  association limit. Compaction array 1709007 is dependency-queued after the
+  provider, and corrected transformed-DockQ array 1709046 is dependency-
+  queued after compaction. Both use run-scoped paths only; active KUACC
+  refinement jobs and all canonical/source assets remain untouched.
+- The transformed scoring adapter is under
+  `benchmark/scripts/score_transformed_usalign_batch.py` with job wrapper
+  `benchmark/jobs/score_transformed_usalign_batches.sbatch`. It uses the
+  existing bijective evaluator, preserves GlobalDockQ separately from
+  requested cross-interface components, checkpoints each candidate, and
+  deletes combined/scoring scratch only after the checkpoint is written.
+- Before enabling cleanup, the compactor was tightened to retain per-case
+  query/Structure_1 and reference/Structure_2 score summaries plus explicit
+  dual-score provenance on generated candidate rows. The focused suite remains
+  `34 passed`; raw alignment JSON is not eligible for deletion without these
+  compact summaries.
+
+### PRISM aligner comparison continuation - 2026-09-28
+
+- The transformed-DockQ cleanup gate now deletes transformed halves only for
+  `scored`, `scored_cross_only`, or `valid_unscored` rows; `score_failed` and
+  unresolved non-scoreable candidates remain auditable. The production wrapper
+  now passes `--retain-transformed-inputs`, because common refinement is still
+  a downstream consumer; only combined/scoring scratch is deleted at DockQ.
+  The focused retention, compaction, and corrected-refinement tests pass
+  (`46 passed` in the latest selected run).
+- USalign compaction now joins generated candidate rows to each batch's
+  `inputs.csv`, retaining `pair_id`, `benchmark_set`, source row, and complex
+  identity in the compact ledger. This preserves BM5.5 case grain for the
+  final EDA without filename-derived identity inference.
+- Existing GTalign full-BM55 transformed scoring was reconciled as reusable
+  historical-panel evidence: 15,440 candidate rows, 14,300 scored and 1,140
+  score failures across 216 cases. GlobalDockQ is separate from the
+  diagnostic best/interface score. A compact requested-interface table was
+  rebuilt from retained raw JSON plus the frozen dataset manifest (18,052
+  interface rows; zero JSON parse failures). No exact-panel or refined
+  GTalign claim is promoted from this lane.
+- A read-only `aggregate_corrected_refinement.py` was added and staged into
+  the active KUACC run. It reads raw DockQ JSON, preserves requested
+  receptor-ligand components and GlobalDockQ, computes paired FiberDock versus
+  external-Rosetta deltas only when both scores exist, and writes a cleanup
+  eligibility gate without deleting files.
+- The first compact case-wise overlap output is retained under
+  `benchmark/prism_processed_results/prism_aligner_comparison_20260928/candidate_overlap/historical_tmalign_multiprot/`.
+  With candidate identity defined as template, query pair, orientation, and
+  chain pair, the historical lane has 82 shared TMalign/MultiProt candidates,
+  2,986 TMalign-unique candidates, 66,745 MultiProt-unique candidates, and
+  mean case-wise Jaccard `0.0014676` across 257 cases. This is an execution
+  observation, not a quality or causal conclusion.
+- The overlap analysis now includes compact GTalign transformed candidates.
+  GTalign/TMalign has 210 shared candidates (mean case-wise Jaccard
+  `0.0532620`) and GTalign/MultiProt has 19 shared (mean Jaccard
+  `0.0003044`); candidate presence is 216, 195, and 257 cases for GTalign,
+  TMalign, and MultiProt respectively. These identities are only comparable
+  where query/chain/orientation contracts agree.
+- Added `benchmark/scripts/aggregate_matched_comparison.py` with tests. It
+  merges compact candidate/score tables, emits one method-by-case row plus
+  candidate and top-k diagnostic tables, preserves explicit failure statuses,
+  and never coerces absent DockQ to zero.
+- GTalign common-refinement preparation validated 14,470 materialized models
+  and 970 rejected rows with explicit reasons. Array 1709167 (`0-144%8`,
+  100 candidates per task) is now running on VALAR `kutem`, using the staged
+  validated FiberDock/external-Rosetta/corrected-DockQ worker. Early
+  checkpoints show the worker contract is executing; refinement/scoring
+  outcomes remain pending and no GTalign raw/source trees have been deleted.
+- Read-only corrected-refinement aggregation job 1709178 (test-only 1709177)
+  is dependency-linked after 1709167. It will require all 14,470 checkpoints,
+  write compact GlobalDockQ/cross-interface and paired FiberDock/Rosetta
+  records, and leave deletion to the separate hash-checked cleanup gate.
+- GTalign refinement currently has 24 completed and 4 running checkpoints,
+  with no stage-failure records; among those records external Rosetta has 10
+  completed and 9 explicit `no_model` outcomes. This is execution evidence
+  only. The KUACC
+  TMalign/MultiProt common-refinement array still has one running task and
+  remains untouched.
+- Added and tested `aggregate_usalign_batches.py` plus its Slurm wrapper. The
+  read-only aggregation job 1709192 (test-only 1709191) is queued after the
+  corrected transformed-DockQ array 1709046 and will accept results only when
+  all 26 per-batch status/TSV packages validate.
+- Added and tested `prepare_usalign_refinement_manifest.py`; it references
+  retained transformed halves in place, selects only explicit refinable score
+  states, and records rejected rows/reasons. No USalign raw or transformed
+  artifacts have been deleted.
+- Added and tested `aggregate_final_matched_comparison.py`; it will join exact
+  candidate identities across transformed/refined tables and emit compact
+  case-level, candidate-level, ranking, and paired-delta outputs with explicit
+  normal-approximation confidence intervals.
+- A fail-closed handoff job 1709233 (dry-run 1709232) is now dependency-linked
+  after USalign batch aggregation 1709192. It prepares the common-refinement
+  manifest only after `validated_compacted` and does not submit nested Slurm
+  work or delete transformed structures.
+- Latest verified scheduler/artifact poll: USalign batches 1--4 remain active
+  with roughly 398k/392k/406k/426k raw alignment records and no compact batch
+  status files. GTalign has 24 completed and 4 running checkpoints; FiberDock
+  has 24 scored records and external Rosetta has 12 completed plus 12 explicit
+  `no_model` outcomes, with no stage failures observed.
+- Added and tested `aggregate_timing_resources.py`; it emits compact stage
+  timing/resource rows and preserves empty resource fields when a source does
+  not record CPU/GPU allocation data.
+- Added and tested `cleanup_usalign_run.py`; its dry-run/apply gate verifies
+  retained aggregate hashes, the refinement handoff, common-refinement
+  aggregate eligibility, and final-package validation before planning removal
+  of only `current/batch_*`, refinement `results`, and `adapter_inputs`.
+  No cleanup has been applied because the live consumers are incomplete.
+- Re-ran the comparison-focused regression set after the cleanup and parser
+  provenance updates: `74 passed`. The DockQ runtime fixture now explicitly
+  verifies both mapping placement and the intentional `--n_cpu 1` argument.
+- Latest live poll at 2026-09-28T05:54:41+03:00: USalign provider tasks 1--6
+  are active or have just started, later array tasks remain pending, and no
+  compact status files exist. GTalign common refinement has 92 checkpoint
+  files: 87 top-level completed, 4 running, and 1 failed. The failed
+  `medium_1wq1_045 / 1de4AC / o1` record is an explicit
+  input-normalization mismatch (native ligand `G*` has two chains; predicted
+  model chain `D` has one), retained without unsupported reconstruction.
+  FiberDock has 90 completed stages and 86 DockQ scores, external Rosetta has
+  43 completions and 43 explicit `no_model` outcomes.
+  KUACC task `3132295_874` remains active; its documented GPU helper path was
+  unavailable, so direct scheduler inspection was used. No cleanup or job
+  intervention was performed.
+- Follow-up scheduler poll at 2026-09-28T05:58:33+03:00: USalign provider
+  tasks 1, 3, 5, 6, and 7 were active, later tasks pending, and no compact
+  marker existed; all dependent stages remained held. GTalign stayed at 92
+  checkpoint files (87 completed, 4 running, 1 explicit failure). No cleanup
+  or job intervention was performed.
+- At 2026-09-28T06:00:11+03:00, USalign task `1708992_1` exited `0:0` with
+  `available=10 unavailable=0` and empty stderr. Tasks 3, 5, 6, and 7 remain
+  active; later tasks and all dependency stages remain pending, so the single
+  completed task is not promoted to a validated provider-stage result.
+- At 2026-09-28T06:12:29+03:00, GTalign refinement advanced to 93 checkpoint
+  files: 88 completed, 4 running, and 1 explicit failure. USalign tasks 3, 5,
+  6, and 7 remain active with no compact marker; no dependency stage or cleanup
+  was advanced.
+- At 2026-09-28T06:13:42+03:00, GTalign refinement advanced again to 94
+  checkpoint files: 89 completed, 4 running, and 1 explicit failure. USalign
+  tasks 3, 5, 6, and 7 remain active; no dependency stage or cleanup was
+  advanced.
+- At 2026-09-28T06:15:23+03:00, GTalign refinement advanced again to 95
+  checkpoint files: 90 completed, 4 running, and 1 explicit failure. USalign
+  tasks 3, 5, 6, and 7 remain active; no dependency stage or cleanup was
+  advanced.
+- At 2026-09-28T06:16:48+03:00, one GTalign checkpoint transitioned to
+  completed without a new file: the ledger is now 95 files with 91 completed,
+  3 running, and 1 explicit failure. USalign tasks 3, 5, 6, and 7 remain
+  active; no dependency stage or cleanup was advanced.
+- At 2026-09-28T06:17:27+03:00, GTalign produced one additional checkpoint;
+  the ledger is now 96 files with 91 completed, 4 running, and 1 explicit
+  failure. USalign tasks 3, 5, 6, and 7 remain active; no dependency stage or
+  cleanup was advanced.
+- The corrected-refinement aggregator now preserves nested worker failure
+  stage names and error/reason text. This is required for the observed GTalign
+  chain-cardinality failure to remain auditable rather than becoming a missing
+  row or score zero; the focused aggregation/cleanup/adapter tests pass `5/5`.
+- A bounded audit of active USalign raw records found explicit
+  `alignment_unavailable` rows alongside valid records with both
+  `tm_score_query` and `tm_score_ref`. Updated
+  `benchmark/scripts/replay_compact_usalign_batch.py` so compact numerical
+  means use complete successful records only, while status/failure counts and
+  valid-record counts remain explicit. Focused affected comparison tests pass
+  `35/35`; the provider remains valid and does not require rerun. Provenance
+  delta: `usalign_production_19855/source_snapshot_after_alignment_summary_contract_fix.json`.
+- KUACC reconciliation resolved the prior `3132295_874` disappearance to child
+  `3140177` (`COMPLETED`, exit `0:0`) and controller `3132296`
+  (`COMPLETED`, exit `0:0`). It scheduled continuation arrays `3140365` and
+  `3140401`--`3140407`; the same remote run has 16,651 checkpoint files and
+  no aggregate yet. These are the authorized existing common-refinement run;
+  no unrelated job was modified and no cleanup was applied.
+- Strengthened `benchmark/scripts/aggregate_final_matched_comparison.py`
+  before production tables exist: it now reports explicit no-ranking/all,
+  deterministic, PRODIGY-when-available, top-1/3/5, and diagnostic-oracle
+  strategies, with transformed/refined coverage, cross-interface quality, and
+  method-by-split summary tables. Focused reducer tests pass `3/3`; provenance is recorded in the
+  final-ranking source-snapshot delta. KUACC refinement reached 16,484
+  checkpoints with no aggregate package yet.
+- At 2026-09-28T06:22:15+03:00, the corrected GTalign checkpoint probe found
+  97 files: 92 completed, 4 running, and 1 explicit input-normalization
+  failure. USalign provider tasks `3`, `5`, `6`, and `7` remain active; all
+  downstream compact/DockQ/aggregation/handoff jobs remain dependency-held.
+  No cleanup or job intervention was performed.
+- At 2026-09-28T06:25:50+03:00, KUACC Slurm showed authorized common-refinement
+  continuation progress: array `3140365` reached running task `_919`, and
+  array `3140401` began running tasks `_786/_787`; later shards remain under
+  `AssocMaxJobsLimit`. A large-tree remote checkpoint count probe timed out,
+  so no count or completion was inferred and no intervention was performed.
+- At 2026-09-28T06:27:19+03:00, GTalign common refinement reached 99 checkpoint
+  files: 94 completed, 4 running, and 1 explicit failure. KUACC continuation
+  `3140401` reached running task `_862`, while `3140365` remained active at
+  `_919`; local USalign and all dependent stages remained active/held.
+- At 2026-09-28T06:28:26+03:00, GTalign common refinement reached 100
+  checkpoint files: 95 completed, 4 running, and 1 explicit failure. KUACC
+  continuation `3140401` reached task `_900`, while `3140365` remained active
+  at `_919`; local USalign and downstream stages remained active/held.
+- At 2026-09-28T06:29:06+03:00, KUACC continuation `3140401` advanced to
+  running task `_919` and `3140365` remained active at `_919`. GTalign stayed
+  at 100 checkpoints (95 completed, 4 running, 1 explicit failure); local
+  USalign and dependent stages remained active/held.
+- At 2026-09-28T06:30:32+03:00, KUACC continuation `3140401` reached running
+  task `_964` and `3140365` remained active at `_919`. GTalign remained at
+  100 checkpoints (95 completed, 4 running, 1 explicit failure); no local
+  compact, DockQ, aggregation, or cleanup marker existed.
+- At 2026-09-28T06:31:24+03:00, KUACC continuation `3140401` reached running
+  task `_988` while `3140365` remained active at `_919`. Local USalign and
+  GTalign workers remained active and downstream jobs remained dependency-held;
+  a broad marker scan timed out and was not treated as completion evidence.
+- At 2026-09-28T06:32:05+03:00, KUACC continuation `3140401` reached tasks
+  `_997`–`_999` and continuation shard `3140402` began tasks `0`–`10`; later
+  tasks remained association-limit pending. Local USalign/GTalign workers and
+  their downstream dependency chain remained active/held.
+- At 2026-09-28T06:32:41+03:00, KUACC refinement shard `3140402` advanced to
+  running tasks through `_31`; tasks `_32–999` remained association-limit
+  pending. Local USalign/GTalign workers and downstream stages remained
+  active/held; GTalign remained at 95 completed, 4 running, 1 failure.
+- At 2026-09-28T06:33:43+03:00, KUACC refinement shard `3140402` advanced to
+  running task `_65`; tasks `_66–999` remained association-limit pending. Local
+  USalign/GTalign workers and downstream stages remained active/held; GTalign
+  remained at 95 completed, 4 running, 1 failure.
+- At 2026-09-28T06:35:30+03:00, KUACC refinement shard `3140402` advanced to
+  running task `_122`; tasks `_123–999` remained association-limit pending.
+  Local provider/refinement arrays remained active and GTalign remained at 95
+  completed, 4 running, 1 explicit failure; no dependency or cleanup gate
+  opened.
+- At 2026-09-28T06:34:29+03:00, KUACC refinement shard `3140402` advanced to
+  running task `_93`; tasks `_94–999` remained association-limit pending. Local
+  USalign/GTalign workers and downstream stages remained active/held; GTalign
+  remained at 95 completed, 4 running, 1 failure.
+- At 2026-09-28T06:36:08+03:00, KUACC refinement shard `3140402` advanced to
+  running task `_146`; tasks `_147–999` remained association-limit pending.
+  Local USalign/GTalign workers remained active; GTalign remained at 95
+  completed, 4 running, 1 explicit failure.
+- At 2026-09-28T06:37:59+03:00, KUACC refinement shard `3140402` advanced to
+  running task `_208`; tasks `_209–999` remained association-limit pending.
+  Local USalign/GTalign workers remained active; GTalign remained at 95
+  completed, 4 running, 1 explicit failure. No downstream gate opened.
+- At 2026-09-28T06:38:43+03:00, USalign provider task `1708992_8` started
+  while tasks `9–26` remained array-limit pending. KUACC refinement shard
+  `3140402` reached task `_234`; GTalign remained at 95 completed, 4 running,
+  1 explicit failure and local downstream stages remained dependency-held.
+- At 2026-09-28T06:39:34+03:00, USalign task `1708992_8` remained running with
+  tasks `9–26` array-limit pending. KUACC refinement shard `3140402` reached
+  task `_262`; later tasks remained association-limited. GTalign remained at
+  95 completed, 4 running, 1 explicit failure.
+- At 2026-09-28T06:40:31+03:00, USalign task `1708992_8` remained active with
+  tasks `9–26` array-limit pending. KUACC refinement shard `3140402` reached
+  task `_288`; later tasks remained association-limited. GTalign remained at
+  95 completed, 4 running, 1 explicit failure.
+- At 2026-09-28T06:42:01+03:00, KUACC refinement shard `3140402` advanced to
+  running task `_341`; tasks `_342–999` remained association-limit pending.
+  USalign task `1708992_8` and all four GTalign workers remained active;
+  GTalign remained at 95 completed, 4 running, 1 explicit failure.
+- At 2026-09-28T06:42:43+03:00, KUACC refinement shard `3140402` advanced to
+  running task `_369`; tasks `_370–999` remained association-limit pending.
+  USalign task `1708992_8` and all GTalign workers remained active; GTalign
+  remained at 95 completed, 4 running, 1 explicit failure.
+- At 2026-09-28T06:44:45+03:00, GTalign common refinement reached 101
+  checkpoint files: 96 completed, 4 running, and 1 explicit failure. KUACC
+  refinement shard `3140402` reached task `_440`; tasks `_441–999`
+  remained association-limit pending and local downstream stages remained held.
+- At 2026-09-28T06:43:21+03:00, KUACC refinement shard `3140402` advanced to
+  running task `_390`; tasks `_391–999` remained association-limit pending.
+  USalign task `1708992_8` and GTalign workers remained active; GTalign
+  remained at 95 completed, 4 running, 1 explicit failure.
+- At 2026-09-28T06:44:02+03:00, KUACC refinement shard `3140402` advanced to
+  running task `_415`; tasks `_416–999` remained association-limit pending.
+  USalign task `1708992_8` and GTalign workers remained active; GTalign
+  remained at 95 completed, 4 running, 1 explicit failure.
+- At 2026-09-28T06:45:40+03:00, KUACC refinement shard `3140402` advanced to
+  running task `_471`; tasks `_472–999` remained association-limit pending.
+  GTalign remained at 101 checkpoints (96 completed, 4 running, 1 explicit
+  failure); USalign task `1708992_8` remained active and downstream local
+  stages remained held.
+- At 2026-09-28T06:46:49+03:00, KUACC refinement shard `3140402` advanced to
+  running task `_511`; tasks `_512–999` remained association-limit pending.
+  GTalign remained at 96 completed, 4 running, 1 explicit failure; USalign
+  task `1708992_8` remained active and downstream local stages remained held.
+
+- At 2026-09-28T06:58:49+03:00, KUACC refinement shard `3140402` advanced
+  through running task `_924`; tasks `_925–999` remained association-limit
+  pending, while shards `3140403–3140407` and controller `3140408` remained
+  dependency/association-limited. GTalign advanced to 98 completed, 4 running,
+  and 1 explicit input-normalization failure. USalign task `1708992_8` remained
+  active with tasks `9–26` array-limit pending; downstream USalign stages stayed
+  dependency-held.
+- At 2026-09-28T06:51:13+03:00, KUACC shard `3140402` had running tasks
+  through `_663`, with task `_636` in `COMPLETING`; tasks `_664–999`
+  remained association-limited. GTalign remained at 96 completed, 4 running,
+  1 explicit failure; USalign task `1708992_8` remained active and downstream
+  local stages remained held.
+- At 2026-09-28T06:51:57+03:00, KUACC shard `3140402` advanced to running
+  task `_694`; tasks `_695–999` remained association-limit pending and the
+  previously completing task was no longer listed by Slurm. GTalign remained
+  at 96 completed, 4 running, 1 explicit failure; USalign task `1708992_8`
+  remained active.
+- At 2026-09-28T06:50:37+03:00, KUACC refinement shard `3140402` advanced to
+  running task `_647`; tasks `_648–999` remained association-limit pending.
+  GTalign remained at 96 completed, 4 running, 1 explicit failure; USalign
+  task `1708992_8` remained active and downstream local stages remained held.
+- At 2026-09-28T06:50:04+03:00, KUACC refinement shard `3140402` advanced to
+  running task `_624`; tasks `_625–999` remained association-limit pending.
+  GTalign remained at 96 completed, 4 running, 1 explicit failure; USalign
+  task `1708992_8` remained active and downstream local stages remained held.
+- At 2026-09-28T06:49:28+03:00, KUACC refinement shard `3140402` advanced to
+  running task `_600`; tasks `_601–999` remained association-limit pending.
+  GTalign remained at 96 completed, 4 running, 1 explicit failure; USalign
+  task `1708992_8` remained active and downstream local stages remained held.
+- At 2026-09-28T06:52:34+03:00, KUACC refinement shard `3140402` advanced to
+  running task `_714`; tasks `_715–999` remained association-limit pending.
+  GTalign remained at 96 completed, 4 running, 1 explicit failure; USalign
+  task `1708992_8` remained active and downstream local stages remained held.
+- At 2026-09-28T06:47:52+03:00, KUACC refinement shard `3140402` advanced to
+  running task `_549`; tasks `_550–999` remained association-limit pending.
+  GTalign remained at 96 completed, 4 running, 1 explicit failure; USalign
+  task `1708992_8` remained active and downstream local stages remained held.
+
+### Current live execution — 2026-09-28T08:08:17+03:00
+
+- GTalign common refinement checkpoint audit reports 120 completed, 4 running,
+  and 2 explicit input-normalization failures. All completed records contain
+  `fiberdock`, `external_rosetta`, `dockq_fiberdock`, and `dockq_rosetta`.
+- USalign production batches 1–4 have validated completion markers; batches
+  5–8 remain active with growing pipeline logs. The compact/DockQ/aggregate
+  dependencies remain held until the provider array is complete.
+- The existing KUACC refinement lane owns the TMalign/MultiProt selected
+  candidates; its current wave is advancing through shard 21. No duplicate
+  refinement or cleanup is authorized while consumers remain active.
+
+### Live poll — 2026-09-28T08:09:43+03:00
+
+- GTalign now has 121 completed, 4 running, and 2 explicit failures; completed
+  checkpoints still pass required-stage validation.
+- USalign provider batches 1–4 are complete with exit markers; batches 5–8
+  remain active and continue growing logs.
+- KUACC shard 21 is active through task 73 while later work remains
+  association-limited; no compact downstream marker is present yet.
+
+### Live poll — 2026-09-28T08:11:01+03:00
+
+- GTalign remains at 121 completed, 4 running, and 2 explicit failures with
+  complete stage keys on every completed checkpoint.
+- USalign batches 5–8 are still active and their logs grew; batches 1–4 remain
+  the only provider batches with validated exit markers.
+- KUACC shard 21 advanced through active task 116; no downstream compact
+  marker is available and cleanup remains ineligible.
+
+### Live poll — 2026-09-28T08:12:06+03:00
+
+- GTalign remains at 121 completed, 4 running, and 2 explicit failures; active
+  logs are changing and completed checkpoint contracts remain valid.
+- USalign batches 1–4 remain validated complete, while batches 5–8 are active
+  without exit markers.
+- KUACC shard 21 progressed through task 142, with task 119 completing; no
+  downstream compact marker or cleanup gate is available.
+
+### Live poll — 2026-09-28T08:12:53+03:00
+
+- GTalign remains at 121 completed, 4 running, and 2 explicit failures; active
+  logs remain live and completed-stage validation is clean.
+- USalign batches 1–4 remain complete and validated; batches 5–8 have no exit
+  markers yet.
+- KUACC shard 21 advanced through active task 178; downstream aggregation and
+  cleanup remain ineligible.
+
+### Contract audit and repair preparation — 2026-09-28T08:20:22+03:00
+
+- GTalign refinement reports 124 completed, 4 running, and 3 explicit
+  failures. The new `medium_1ijk_021` failure is a source/native side
+  partition mismatch, not a total-chain mismatch.
+- The selected manifest contains 268 rows with source-side 2+1 versus native
+  1+2 chain partitions. A separate run-scoped repair wrapper preserves source
+  partitions and restores the native DockQ mapping; its real-candidate smoke
+  test passed and it rejects the known 1wq1 total-chain mismatch.
+- The original array remains the sole active owner. Repair submission waits for
+  the original failed-row set to become final, preventing overlap.
+
+### Live poll — 2026-09-28T08:21:32+03:00
+
+- GTalign reached 132 completed and 4 running checkpoints. Four failures are
+  recorded: one repairable cross-partition candidate and three explicit
+  `1wq1` total-chain mismatches.
+- The original refinement array remains active; the corrected repair wrapper is
+  validated but intentionally not submitted until ownership is released.
+
+### Repair manifest prepared — 2026-09-28T08:24:41+03:00
+
+- GTalign has 134 completed, 4 running, and 4 explicit failures.
+- A hashed 268-row cross-partition repair manifest is retained at
+  `gtalign_common_refinement_19855/repair/manifest.json`. It is disjoint by
+  contract from valid completed rows, but submission waits for array 1709167
+  to terminate so the original owner cannot overlap it.
+
+### Live poll — 2026-09-28T08:25:31+03:00
+
+- GTalign reached 135 completed and 4 running checkpoints; the four explicit
+  failures remain classified and stage validation is clean for completed rows.
+- The original array remains active. The repair manifest is ready but not
+  submitted; KUACC shard 21 advanced through task 543 and downstream compact
+  jobs remain held.
+
+### Live poll — 2026-09-28T08:26:36+03:00
+
+- GTalign reached 136 completed and 4 running checkpoints; the four explicit
+  failures remain unchanged and completed-stage validation is clean.
+- Array 1709167 remains active, while KUACC shard 21 advanced through task 581.
+  The repair manifest remains ready but unsubmitted and cleanup remains
+  ineligible.
+
+### Live poll — 2026-09-28T08:29:25+03:00
+
+- GTalign reached 137 completed and 4 running checkpoints; the four explicit
+  failures remain classified and completed-stage validation is clean.
+- Array 1709167 remains active, while KUACC shard 21 advanced through task 616.
+  The repair manifest remains ready but unsubmitted and cleanup remains
+  ineligible.
+
+### Live poll — 2026-09-28T08:30:11+03:00
+
+- GTalign reached 139 completed and 4 running checkpoints; the four explicit
+  failures remain classified and completed-stage validation is clean.
+- Array 1709167 remains active, while KUACC shard 21 advanced through task 688.
+  The repair manifest remains ready but unsubmitted and cleanup remains
+  ineligible.
+
+### Live poll — 2026-09-28T08:32:19+03:00
+
+- GTalign reached 141 completed and 4 running checkpoints; all completed
+  checkpoints contain the required input-normalization, refinement, and DockQ
+  stages, with four explicit failures retained.
+- Array 1709167 remains active; the 268-row repair manifest remains ready but
+  unsubmitted, and cleanup remains ineligible while downstream consumers are
+  held.
+
+### Live poll — 2026-09-28T08:34:11+03:00
+
+- GTalign reached 145 completed and 3 running checkpoints; all completed
+  checkpoints pass the required nested-stage audit.
+- Failures are now classified as one repairable equal-total cross-partition
+  `medium_1ijk_021` candidate and four explicit `medium_1wq1_045` total-chain
+  mismatches. Array 1709167 remains active, so repair submission is still held.
+
+### Live poll — 2026-09-28T08:35:13+03:00
+
+- GTalign reached 146 completed and 4 running checkpoints; all completed
+  checkpoints pass the required nested-stage audit.
+- The five failure classifications remain unchanged, and array 1709167 remains
+  active. Repair submission and cleanup remain held.
+
+### Live poll — 2026-09-28T08:36:59+03:00
+
+- GTalign remains at 146 completed and 4 running checkpoints, with five
+  classified failures.
+- Bounded repair array 1709749 (three shards) was submitted with dependency
+  `afterany:1709167:1709178`; it is pending and cannot overlap the original
+  refinement or first aggregate. Submission provenance is retained in the run
+  package.
+
+### Live poll — 2026-09-28T08:38:03+03:00
+
+- GTalign reached 150 completed and 4 running checkpoints; all completed
+  checkpoints pass the nested-stage audit and five explicit failures remain.
+- Repair array 1709749 is still dependency-held by the original refinement and
+  first aggregate; no repair output exists yet. USalign batches 5–8 remain
+  active.
+
+### Live poll — 2026-09-28T08:38:53+03:00
+
+- GTalign reached 151 completed and 4 running checkpoints; all completed
+  checkpoints pass the nested-stage audit and five explicit failures remain.
+- Repair array 1709749 remains dependency-held by 1709167 and 1709178, with no
+  repair output yet. USalign batches 5–8 remain active.
+
+### Live poll — 2026-09-28T08:39:30+03:00
+
+- GTalign reached 152 completed and 4 running checkpoints; all completed
+  checkpoints pass the nested-stage audit and five explicit failures remain.
+- Repair array 1709749 remains dependency-held by 1709167 and 1709178, with no
+  repair output yet. USalign batches 5–8 remain active.
+
+### Live poll — 2026-09-28T08:40:07+03:00
+
+- GTalign reached 154 completed and 4 running checkpoints; all completed
+  checkpoints pass the nested-stage audit and five explicit failures remain.
+- Repair array 1709749 remains dependency-held by 1709167 and 1709178, with no
+  repair output yet. USalign batches 5–8 remain active.
+
+### Live poll — 2026-09-28T08:40:46+03:00
+
+- GTalign reached 155 completed and 4 running checkpoints; all completed
+  checkpoints pass the nested-stage audit and five explicit failures remain.
+- Repair array 1709749 remains dependency-held by 1709167 and 1709178, with no
+  repair output yet. USalign batches 5–8 remain active.
+
+### Live poll — 2026-09-28T08:41:52+03:00
+
+- GTalign reached 157 completed and 4 running checkpoints; all completed
+  checkpoints pass the nested-stage audit and five explicit failures remain.
+- Repair array 1709749 remains dependency-held by 1709167 and 1709178, with no
+  repair output yet. USalign batches 5–8 remain active.
+
+### Live poll — 2026-09-28T08:42:30+03:00
+
+- GTalign reached 158 completed and 4 running checkpoints; all completed
+  checkpoints pass the nested-stage audit and five explicit failures remain.
+- Repair array 1709749 remains dependency-held by 1709167 and 1709178, with no
+  repair output yet. USalign batches 5–8 remain active.
+
+### Live poll — 2026-09-28T08:52:48+03:00
+
+- GTalign reached 159 completed and 4 running checkpoints; all completed
+  checkpoints pass the nested-stage audit and five explicit failures remain.
+- Repair array 1709749 remains dependency-held by 1709167 and 1709178, with no
+  repair output yet. USalign batches 5–8 remain active.
+
+### Live poll — 2026-09-28T08:53:54+03:00
+
+- GTalign reached 160 completed and 4 running checkpoints; all completed
+  checkpoints pass the nested-stage audit and five explicit failures remain.
+- Repair array 1709749 remains dependency-held by 1709167 and 1709178, with no
+  repair output yet. USalign batches 5–8 remain active.
+
+### Live poll — 2026-09-28T08:54:58+03:00
+
+- GTalign reached 161 completed and 4 running checkpoints; all completed
+  checkpoints pass the nested-stage audit and five explicit failures remain.
+- Repair array 1709749 remains dependency-held by 1709167 and 1709178, with no
+  repair output yet. USalign batches 5–8 remain active.
+
+### Live poll — 2026-09-28T09:00:05+03:00
+
+- GTalign reached 166 completed and 4 running checkpoints; all 166 completed
+  checkpoint records pass the corrected nested-stage audit and five explicit
+  failures remain.
+- Repair array 1709749 remains dependency-held by 1709167 and 1709178, with no
+  repair output yet. USalign batches 5–8 remain active; KUACC refinement also
+  remains active.
+
+### Presentation revision — 2026-10-01
+
+- Revised `/scratch/rshadi25/GitHub/PRISM-prescript/docs/PRISM-benchmark.pptx`
+  with denominator-aware benchmark groups, self-comparison controls, DockQ/
+  Rosetta score interpretation and cross-checks, relaxed-threshold per-case
+  counts, and the MultiProt candidate-count explanation.
+- Added the 1s78A/1s78D PyMOL input, native, transformed, and refined figures;
+  PNG/PSE artifacts are in `tmp/agent/20261001-prism-presentation/pymol/`.
+- Final artifact has 40 slides with references last. Python-PPTX bounds/evidence
+  QA, wording audit, Python syntax check, and ZIP integrity/uniqueness checks
+  pass. No commit or production workload was requested or performed.
+
+### Presentation typography revision — 2026-10-01
+
+- Rebuilt `docs/PRISM-benchmark.pptx` from the preserved pre-revision deck using
+  a standardized 24 pt slide-title band, 11.5 pt subtitle band, 8.5 pt source
+  footer, compact 15–16.5 pt card text, and run-level font persistence.
+- Replaced the generic title slide with `PRISM Docking Benchmark` and the
+  subtitle `Pipeline comparison, scoring controls, and refinement-energy analysis`.
+- Compactened the DockQ–energy reversal and low-energy/poor-DockQ tables so
+  the values remain readable inside the 10 × 5.625 inch canvas.
+- Normalized retained historical-slide titles to 24 pt and legacy body text to
+  14.5 pt while preserving the original wording and figures.
+- Final typography/package audit passes: 40 slides, saved run-level font sizes,
+  all slide objects within bounds, expected numerical/text sections present,
+  and all seven referenced PyMOL figures available. No production workload or
+  source-code change was performed.
+
+### Live poll — 2026-09-28T09:01:36+03:00
+
+- GTalign reached 167 completed and 4 running checkpoints; all 167 completed
+  checkpoint records pass the corrected nested-stage audit and five explicit
+  failures remain.
+- Repair array 1709749 remains dependency-held by 1709167 and 1709178, with no
+  repair output yet. USalign batches 5–8 remain active; KUACC refinement also
+  remains active.
+
+### Live poll — 2026-09-28T09:03:13+03:00
+
+- GTalign reached 169 completed and 4 running checkpoints; all 169 completed
+  checkpoint records pass the corrected nested-stage audit and five explicit
+  failures remain.
+- Repair array 1709749 remains dependency-held by 1709167 and 1709178, with no
+  repair output yet. USalign batches 5–8 remain active; KUACC refinement also
+  remains active.
+
+### Live poll — 2026-09-28T09:04:01+03:00
+
+- GTalign reached 170 completed and 4 running checkpoints; all 170 completed
+  checkpoint records pass the corrected nested-stage audit and five explicit
+  failures remain.
+
+### Comparable alignment contract — 2026-09-28
+
+- Added an opt-in `alignment_gate_mode=common_match_coverage` contract to the
+  active PRISM source. It applies the same minimum matched-residue count,
+  size-adjusted interface coverage, inclusive boundary rule, orientation, and
+  clash policy to TMalign, USalign, GTalign, and MultiProt.
+- The default `native` mode is unchanged. Comparable mode deliberately does
+  not gate on TM-score because MultiProt's stored RMSD-derived proxy is not a
+  TMalign-compatible TM-score; provider scores remain available for analysis.
+- CLI/environment controls are `--alignment-gate-mode` and
+  `PRISM_ALIGNMENT_GATE_MODE`; resolved mode is retained in the audit
+  threshold dictionary.
+- Focused comparison/configuration tests pass (50), compileall passes, and
+  `git diff --check` passes. No production rerun has been submitted for this
+  contract yet.
+- Repair array 1709749 remains dependency-held by 1709167 and 1709178, with no
+  repair output yet. USalign batches 5–8 remain active; KUACC refinement also
+  remains active.

@@ -10,6 +10,8 @@ MultiProt provides the residue match list.
 """
 
 import json
+import hashlib
+import math
 import os
 import shutil
 import subprocess
@@ -26,8 +28,6 @@ from .alignment import (
     _has_ca_atoms,
     _write_empty_alignment,
 )
-
-os.makedirs("processed/alignment", exist_ok=True)
 
 MULTIPROT = os.environ.get("PRISM_MULTIPROT", "external_tools/multiprot.Linux")
 
@@ -132,6 +132,126 @@ def _parse_multiprot_solution(sol_res_path):
                 match_dict[interface_res] = query_res
     
     return match_dict, best_rmsd
+
+
+def _parse_multiprot_solutions(sol_res_path, max_solutions=3):
+    """Parse the first legacy MultiProt solutions from ``2_sol.res``.
+
+    The legacy pipeline retained the solver's reference molecule, six-value
+    ``Trans`` vector, and up to three correspondence solutions.  Keep the
+    same residue-key direction here so the compatibility mode can feed the
+    existing downstream filtering code without changing the default parser.
+    """
+    with open(sol_res_path) as f:
+        lines = f.readlines()
+
+    solutions = []
+    index = 0
+    while index < len(lines) and len(solutions) < max_solutions:
+        if not lines[index].startswith("Solution Num"):
+            index += 1
+            continue
+
+        number = int(lines[index].split(":", 1)[1].strip())
+        fields = {}
+        index += 1
+        while index < len(lines):
+            line = lines[index].strip()
+            if line.startswith("Solution Num"):
+                break
+            if line.startswith("Mult Corres Score"):
+                fields["match_count"] = int(line.split(":", 1)[1].strip())
+            elif line.startswith("Reference Molecule"):
+                fields["reference_molecule"] = int(line.split(":", 1)[1].strip())
+            elif line.startswith("Trans"):
+                fields["trans"] = [
+                    float(value) for value in line.split(":", 1)[1].split()
+                ]
+            elif line.startswith("RMSD"):
+                fields["rmsd"] = float(line.split(":", 1)[1].strip())
+            elif line.startswith("Match List"):
+                match_dict = {}
+                reference = fields.get("reference_molecule", 0)
+                index += 1
+                expected = fields.get("match_count", 0)
+                while index < len(lines) and len(match_dict) < expected:
+                    match_line = lines[index].strip()
+                    if match_line.startswith("End of Match List"):
+                        break
+                    parts = match_line.split()
+                    if len(parts) >= 2:
+                        # This is intentionally the legacy line[refMol]
+                        # direction, including refMol == 1 behavior.
+                        match_dict[parts[reference]] = parts[1 - reference]
+                    index += 1
+                fields["match_dict"] = match_dict
+            index += 1
+
+        fields.setdefault("match_count", len(fields.get("match_dict", {})))
+        fields.setdefault("reference_molecule", 0)
+        fields.setdefault("trans", [0.0] * 6)
+        fields.setdefault("rmsd", float("inf"))
+        fields.setdefault("match_dict", {})
+        fields["solution_number"] = number
+        solutions.append(fields)
+
+    return solutions
+
+
+def _legacy_solution_to_alignment(solution):
+    """Convert one legacy MultiProt solution to the current JSON transform.
+
+    Legacy ``pdbTransform`` operates on row vectors.  The current PDB writer
+    applies a matrix to column coordinates, so the returned matrices are the
+    corresponding transposes.  ``Reference Molecule == 1`` also inverts the
+    translation exactly as the legacy implementation does.
+    """
+    phi, theta, psi, x_translate, y_translate, z_translate = solution.get(
+        "trans", [0.0] * 6
+    )
+    phi += math.pi
+    theta += math.pi
+    psi += math.pi
+
+    cos_phi, sin_phi = math.cos(phi), math.sin(phi)
+    cos_theta, sin_theta = math.cos(theta), math.sin(theta)
+    cos_psi, sin_psi = math.cos(psi), math.sin(psi)
+    legacy_rotation = np.array([
+        [
+            cos_theta * cos_psi,
+            cos_theta * sin_psi,
+            -sin_theta,
+        ],
+        [
+            -cos_phi * sin_psi + sin_phi * sin_theta * cos_psi,
+            cos_phi * cos_psi + sin_phi * sin_theta * sin_psi,
+            sin_phi * cos_theta,
+        ],
+        [
+            sin_phi * sin_psi + cos_phi * sin_theta * cos_psi,
+            -sin_phi * cos_psi + cos_phi * sin_theta * sin_psi,
+            cos_phi * cos_theta,
+        ],
+    ])
+    trans = np.array([x_translate, y_translate, z_translate])
+
+    if solution.get("reference_molecule", 0) == 0:
+        rotation_mat = legacy_rotation.T
+        translation = trans
+    else:
+        rotation_mat = legacy_rotation
+        translation = -(legacy_rotation @ trans)
+
+    return {
+        "rotation_mat": rotation_mat.tolist(),
+        "translation": translation.tolist(),
+        "match_count": solution.get("match_count", 0),
+        "reference_molecule": solution.get("reference_molecule", 0),
+        "trans": solution.get("trans", [0.0] * 6),
+        "rmsd": solution.get("rmsd", float("inf")),
+        "match_dict": solution.get("match_dict", {}),
+        "solution_number": solution.get("solution_number"),
+    }
 
 
 # 1-letter to 3-letter amino acid code mapping
@@ -248,22 +368,32 @@ def _align_one(task):
     and computes the rotation/translation matrix directly from the match list
     using the Kabsch algorithm. No TMalign fallback.
     """
-    query, template, chain, alignment_root = task
+    (
+        query,
+        template,
+        chain,
+        alignment_root,
+        multiprot_mode,
+        multiprot_params,
+        multiprot_solutions,
+    ) = task
     query_path = f"processed/surface_extraction/{query}.asa.pdb"
     interface_path = f"templates/interfaces/{template}_{chain}_int.pdb"
     output_path = os.path.join(alignment_root, f"{query}_{template}_{chain}.json")
     
     if not _has_ca_atoms(query_path) or not os.path.exists(interface_path):
-        _write_empty_alignment(output_path)
+        _write_empty_alignment(output_path, error_reason="input_or_interface_missing")
         return None
     
     # Check seccomp before running 32-bit MultiProt
     if not _check_seccomp():
         print(f"MultiProt skipped for {query} and {template}_{chain}: "
               "seccomp blocks 32-bit binaries on this node")
-        _write_empty_alignment(output_path)
+        _write_empty_alignment(output_path, error_reason="seccomp_blocked")
         return None
-    
+
+    return_code = None
+    raw_output_sha256 = None
     try:
         with tempfile.TemporaryDirectory(prefix="multiprot-", dir=alignment_root) as scratch:
             scratch = Path(scratch)
@@ -273,6 +403,10 @@ def _align_one(task):
             i_pdb = scratch / "interface.pdb"
             shutil.copy2(query_path, str(q_pdb))
             shutil.copy2(interface_path, str(i_pdb))
+            if multiprot_params:
+                # MultiProt reads params.txt from its working directory.  A
+                # private copy keeps the caller's legacy configuration read-only.
+                shutil.copy2(multiprot_params, str(scratch / "params.txt"))
             
             # Step 2: Use pre-resolved absolute path to MultiProt
             # (ThreadPoolExecutor threads inherit CWD but the binary path
@@ -282,11 +416,22 @@ def _align_one(task):
             if not os.path.exists(mp_exe):
                 raise RuntimeError(f"MultiProt not found at {mp_exe}")
             
+            mp_inputs = (
+                [str(i_pdb), str(q_pdb)]
+                if multiprot_mode == "legacy_compatible"
+                else [str(q_pdb), str(i_pdb)]
+            )
             mp_result = subprocess.run(
-                [mp_exe, str(q_pdb), str(i_pdb)],
+                [mp_exe, *mp_inputs],
                 capture_output=True, text=True, timeout=300,
                 cwd=str(scratch)
             )
+            return_code = mp_result.returncode
+            raw_hasher = hashlib.sha256()
+            raw_hasher.update(mp_result.stdout.encode("utf-8", errors="replace"))
+            raw_hasher.update(b"\0")
+            raw_hasher.update(mp_result.stderr.encode("utf-8", errors="replace"))
+            raw_output_sha256 = raw_hasher.hexdigest()
             
             if mp_result.returncode != 0 and not mp_result.stdout:
                 raise RuntimeError(f"MultiProt failed (exit={mp_result.returncode}): "
@@ -301,19 +446,74 @@ def _align_one(task):
                     except (ValueError, IndexError):
                         pass
             
-            if largest_solution < 5:
-                _write_empty_alignment(output_path)
+            if multiprot_mode == "current" and largest_solution < 5:
+                _write_empty_alignment(
+                    output_path, return_code=return_code,
+                    raw_output_sha256=raw_output_sha256,
+                    error_reason="largest_solution_below_minimum",
+                )
                 return None
             
             # Step 3: Parse 2_sol.res for the actual alignment
             sol_res = scratch / "2_sol.res"
             if not sol_res.exists():
                 raise RuntimeError("MultiProt did not create 2_sol.res")
+            raw_hasher = hashlib.sha256()
+            raw_hasher.update(mp_result.stdout.encode("utf-8", errors="replace"))
+            raw_hasher.update(b"\0")
+            raw_hasher.update(mp_result.stderr.encode("utf-8", errors="replace"))
+            raw_hasher.update(b"\0")
+            raw_hasher.update(sol_res.read_bytes())
+            raw_output_sha256 = raw_hasher.hexdigest()
             
+            if multiprot_mode == "legacy_compatible":
+                parsed_solutions = _parse_multiprot_solutions(
+                    str(sol_res), max_solutions=multiprot_solutions
+                )
+                if not parsed_solutions:
+                    _write_empty_alignment(
+                        output_path, return_code=return_code,
+                        raw_output_sha256=raw_output_sha256,
+                        error_reason="no_solution",
+                    )
+                    return None
+
+                primary = _legacy_solution_to_alignment(parsed_solutions[0])
+                multi_dict = {
+                    "match_count": primary["match_count"],
+                    "translation": primary["translation"],
+                    "rotation_mat": primary["rotation_mat"],
+                    "match_dict": primary["match_dict"],
+                    "tm_score": 0.0,
+                    "tm_score_contract": "multiprot_legacy_native",
+                    "score_gate_contract": "native_match_count_and_coverage",
+                    "rmsd": primary["rmsd"],
+                    "status": "success",
+                    "aligner": "MultiProt",
+                    "multiprot_mode": "legacy_compatible",
+                    "multiprot_solution": primary["solution_number"],
+                    "reference_molecule": primary["reference_molecule"],
+                    "multiprot_trans": primary["trans"],
+                    "multiprot_solutions": [
+                        _legacy_solution_to_alignment(solution)
+                        for solution in parsed_solutions
+                    ],
+                    "raw_output_sha256": raw_output_sha256,
+                    "return_code": return_code,
+                }
+                os.makedirs(alignment_root, exist_ok=True)
+                with open(output_path, "w") as f:
+                    json.dump(multi_dict, f)
+                return None
+
             match_dict, rmsd = _parse_multiprot_solution(str(sol_res))
             
             if len(match_dict) < 3:
-                _write_empty_alignment(output_path)
+                _write_empty_alignment(
+                    output_path, return_code=return_code,
+                    raw_output_sha256=raw_output_sha256,
+                    error_reason="too_few_matches",
+                )
                 return None
             
             # Step 4: Compute transform from matched residues via Kabsch
@@ -322,7 +522,11 @@ def _align_one(task):
             )
             
             if kabsch_rmsd == float('inf'):
-                _write_empty_alignment(output_path)
+                _write_empty_alignment(
+                    output_path, return_code=return_code,
+                    raw_output_sha256=raw_output_sha256,
+                    error_reason="transform_unavailable",
+                )
                 return None
             
             # Step 5: Write alignment JSON
@@ -342,6 +546,8 @@ def _align_one(task):
                 "status": "success",
                 "aligner": "MultiProt",
                 "multiprot_solution": largest_solution,
+                "raw_output_sha256": raw_output_sha256,
+                "return_code": return_code,
             }
             os.makedirs(alignment_root, exist_ok=True)
             with open(output_path, "w") as f:
@@ -351,7 +557,10 @@ def _align_one(task):
         import traceback
         print(f"MultiProt failed for {query} and {template}_{chain}: {exc}")
         traceback.print_exc()
-        _write_empty_alignment(output_path)
+        _write_empty_alignment(
+            output_path, return_code=return_code,
+            raw_output_sha256=raw_output_sha256, error_reason=str(exc)
+        )
     
     return None
 
@@ -359,9 +568,12 @@ def _align_one(task):
 def align_multiprot(
     queries,
     templates,
-    output_dir="processed/alignment",
+    output_dir="processed/alignment_multiprot",
     max_workers=8,
     multiprot_path=None,
+    multiprot_mode="current",
+    multiprot_params=None,
+    multiprot_solutions=3,
 ):
     """MultiProt alignment entry point for the PRISM pipeline.
     
@@ -375,6 +587,14 @@ def align_multiprot(
         max_workers: Number of parallel worker threads
     """
     global MULTIPROT, _MP_ABS
+    if multiprot_mode not in {"current", "legacy_compatible"}:
+        raise ValueError("multiprot_mode must be current or legacy_compatible")
+    if multiprot_solutions < 1:
+        raise ValueError("multiprot_solutions must be at least 1")
+    if multiprot_params:
+        multiprot_params = os.path.abspath(str(multiprot_params))
+        if not os.path.isfile(multiprot_params):
+            raise FileNotFoundError(f"MultiProt params file not found: {multiprot_params}")
     if multiprot_path:
         MULTIPROT = str(multiprot_path)
         _MP_ABS = (
@@ -390,7 +610,17 @@ def align_multiprot(
     for query in queries:
         for template in templates:
             for chain in template[4:]:
-                tasks.append((query, template, chain, alignment_root))
+                tasks.append(
+                    (
+                        query,
+                        template,
+                        chain,
+                        alignment_root,
+                        multiprot_mode,
+                        multiprot_params,
+                        multiprot_solutions,
+                    )
+                )
     
     total = len(tasks)
     if total == 0:

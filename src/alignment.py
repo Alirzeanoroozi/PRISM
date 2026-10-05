@@ -1,29 +1,135 @@
 import os
+import re
+import hashlib
+import subprocess
+import tempfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from Bio.PDB import PDBParser
 import json
 
-os.makedirs("processed/alignment", exist_ok=True)
 
-def align(queries, templates):
-    for protein in queries:
-        for template in templates:
-            for chain in template[4:]:
-                protein_path = f"processed/surface_extraction/{protein}.asa.pdb"
-                interface_path = f"templates/interfaces/{template}_{chain}_int.pdb"
+def iter_bounded_results(tasks, worker, workers, max_pending=None):
+    """Yield one result per task while bounding submitted-but-unfinished work."""
+
+    iterator = iter(tasks)
+    pending_limit = max_pending or max(1, 2 * int(workers))
+    with ThreadPoolExecutor(max_workers=int(workers)) as executor:
+        pending = {}
+        exhausted = False
+        while pending or not exhausted:
+            while not exhausted and len(pending) < pending_limit:
                 try:
-                    os.system(f"external_tools/TMalign {protein_path} {interface_path} -m processed/alignment/matrix.out > processed/alignment/out.tm")
-                except:
-                    print(f"TM-align did not run for {protein} and {template}_{chain}.")
-                parse_tmalign(protein_path, interface_path, protein, template, chain)
+                    task = next(iterator)
+                except StopIteration:
+                    exhausted = True
+                    break
+                future = executor.submit(worker, task)
+                pending[future] = task
+            if not pending:
+                break
+            future = next(iter(as_completed(tuple(pending))))
+            task = pending.pop(future)
+            yield task, future.result()
 
-    if os.path.exists("processed/alignment/matrix.out"):
-        os.remove("processed/alignment/matrix.out")
-    
-    if os.path.exists("processed/alignment/out.tm"):
-        os.remove("processed/alignment/out.tm")
+def _align_one(args):
+    """Align one (protein, template, chain) pair for parallel dispatch."""
+    protein, template, chain, alignment_root, aligner = args
+    protein_path = f"processed/surface_extraction/{protein}.asa.pdb"
+    interface_path = f"templates/interfaces/{template}_{chain}_int.pdb"
+    output_path = os.path.join(alignment_root, f"{protein}_{template}_{chain}.json")
+    if not _has_ca_atoms(protein_path) or not os.path.exists(interface_path):
+        _write_empty_alignment(output_path, error_reason="input_or_interface_missing")
+        return None
+    return_code = None
+    try:
+        with tempfile.TemporaryDirectory(prefix="tmalign-", dir=alignment_root) as scratch:
+            matrix_path = os.path.join(scratch, "matrix.out")
+            output_path_tm = os.path.join(scratch, "out.tm")
+            command = build_alignment_command(
+                aligner, protein_path, interface_path, matrix_path
+            )
+            with open(output_path_tm, "w") as tm_output:
+                result = subprocess.run(
+                    command,
+                    stdout=tm_output,
+                    stderr=subprocess.PIPE,
+                    universal_newlines=True,
+                    check=False,
+                )
+            return_code = result.returncode
+            if (
+                result.returncode != 0
+                or not os.path.isfile(matrix_path)
+                or not os.path.isfile(output_path_tm)
+                or not _valid_tmalign_outputs(matrix_path, output_path_tm)
+            ):
+                raise RuntimeError(
+                    f"TM-align exit={result.returncode}: {(result.stderr or '').strip()[:500]}"
+                )
+            raw_hasher = hashlib.sha256()
+            with open(matrix_path, "rb") as matrix_handle:
+                raw_hasher.update(matrix_handle.read())
+            with open(output_path_tm, "rb") as tm_handle:
+                raw_hasher.update(b"\0")
+                raw_hasher.update(tm_handle.read())
+            raw_output_sha256 = raw_hasher.hexdigest()
+            parse_tmalign(protein_path, interface_path, protein, template, chain,
+                          matrix_path, output_path_tm, alignment_root,
+                          raw_output_sha256=raw_output_sha256,
+                          return_code=return_code,
+                          aligner_name=os.environ.get("PRISM_ALIGNMENT_NAME", "TMalign"))
+    except (OSError, RuntimeError, ValueError, IndexError) as exc:
+        print(f"TM-align failed for {protein} and {template}_{chain}: {exc}")
+        _write_empty_alignment(
+            output_path, return_code=return_code, error_reason=str(exc)
+        )
+    return None
 
-def parse_tmalign(protein_path, interface_path, protein, template, chain):
-    with open("processed/alignment/matrix.out", "r") as matrix_file:
+def align(queries, templates, output_dir="processed/alignment_tmalign"):
+    alignment_root = os.path.abspath(output_dir)
+    os.makedirs(alignment_root, exist_ok=True)
+    aligner = os.environ.get("PRISM_TMALIGN", "external_tools/TMalign")
+    max_workers = int(os.environ.get("PRISM_TMALIGN_WORKERS", "8"))
+    tasks = (
+        (protein, template, chain, alignment_root, aligner)
+        for protein in queries
+        for template in templates
+        for chain in template[4:]
+    )
+    total = len(queries) * sum(len(template[4:]) for template in templates)
+    for i, (_, _) in enumerate(iter_bounded_results(tasks, _align_one, max_workers), 1):
+        if i % 100 == 0:
+            print(f"TM-align progress: {i}/{total}")
+
+
+def build_alignment_command(aligner, protein_path, interface_path, matrix_path):
+    """Build the shared pairwise command for TMalign or USalign.
+
+    USalign remains an interchangeable alignment provider: only its binary,
+    optional fast flag, and output-format option differ.  Parsing and all
+    downstream PRISM stages remain shared.
+    """
+
+    command = [aligner, protein_path, interface_path]
+    aligner_name = os.environ.get("PRISM_ALIGNMENT_NAME", "TMalign").casefold()
+    if aligner_name == "usalign":
+        if os.environ.get("PRISM_USALIGN_FAST", "").strip().casefold() in {
+            "1", "true", "yes", "on"
+        }:
+            command.append("-fast")
+        command.extend(["-outfmt", "-1"])
+    command.extend(["-m", matrix_path])
+    return command
+
+
+def parse_tmalign(
+    protein_path, interface_path, protein, template, chain,
+    matrix_path=None, tm_path=None, output_dir="processed/alignment_tmalign",
+    *, raw_output_sha256=None, return_code=None, aligner_name="TMalign",
+):
+    matrix_path = matrix_path or "processed/alignment_tmalign/matrix.out"
+    tm_path = tm_path or "processed/alignment_tmalign/out.tm"
+    with open(matrix_path, "r") as matrix_file:
         translation = [0.0, 0.0, 0.0]
         rotation_mat = [[0.0, 0.0, 0.0] for _ in range(3)]
 
@@ -46,7 +152,7 @@ def parse_tmalign(protein_path, interface_path, protein, template, chain):
                 rotation_mat[row_index][1] = float(tokens[3])
                 rotation_mat[row_index][2] = float(tokens[4])
 
-    with open("processed/alignment/out.tm", "r") as tm_file:
+    with open(tm_path, "r") as tm_file:
         match_dict = {}
         tm_score_1 = 0.0
         tm_score_2 = 0.0
@@ -59,10 +165,13 @@ def parse_tmalign(protein_path, interface_path, protein, template, chain):
             if line.startswith("Aligned length"):
                 match_count = int(line.split("=")[1].split(",")[0].strip())
             elif line.startswith("TM-score"):
-                tmscore = float(line.split()[1])
-                if "Chain_1" in line:
+                score_match = re.search(r"TM-score\s*=\s*([-+0-9.eE]+)", line)
+                if not score_match:
+                    continue
+                tmscore = float(score_match.group(1))
+                if "Chain_1" in line or "Structure_1" in line:
                     tm_score_1 = tmscore
-                elif "Chain_2" in line:
+                elif "Chain_2" in line or "Structure_2" in line:
                     tm_score_2 = tmscore
             elif line.startswith('(":"'):
                 # Next 3 lines: seq1 (Chain_1), match line, seq2 (Chain_2)
@@ -75,11 +184,20 @@ def parse_tmalign(protein_path, interface_path, protein, template, chain):
         seq2_res_ids, seq2_chain_ids = extract_chain_and_res_ids("interface", interface_path)
         index1 = 0
         index2 = 0
-        for i, s in enumerate(match):
+        # TM-align can emit an alignment whose sequence line is inconsistent
+        # with residue records when the input PDB contains duplicate residue
+        # numbers.  Preserve the valid prefix and record the truncation rather
+        # than discarding the entire candidate with IndexError.
+        usable = min(len(seq1), len(match), len(seq2))
+        mapping_status = "success" if len({len(seq1), len(match), len(seq2)}) == 1 else "mapping_truncated"
+        for i, s in enumerate(match[:usable]):
             if s == ":" or s == ".":
-                seq1_str = seq1_chain_ids[index1] + "." + seq1[i] + "." + seq1_res_ids[index1]
-                seq2_str = seq2_chain_ids[index2] + "." + seq2[i] + "." + seq2_res_ids[index2]
-                match_dict[seq2_str] = seq1_str
+                if index1 < len(seq1_chain_ids) and index1 < len(seq1_res_ids) and index2 < len(seq2_chain_ids) and index2 < len(seq2_res_ids):
+                    seq1_str = seq1_chain_ids[index1] + "." + seq1[i] + "." + seq1_res_ids[index1]
+                    seq2_str = seq2_chain_ids[index2] + "." + seq2[i] + "." + seq2_res_ids[index2]
+                    match_dict[seq2_str] = seq1_str
+                else:
+                    mapping_status = "mapping_truncated"
             if seq1[i] != "-":
                 index1 += 1
             if seq2[i] != "-":
@@ -90,9 +208,22 @@ def parse_tmalign(protein_path, interface_path, protein, template, chain):
         "translation": translation,
         "rotation_mat": rotation_mat,
         "match_dict": match_dict,
-        "tm_score": max(tm_score_1, tm_score_2)
+        # PRISM invokes the aligner as query (Structure_1) -> template
+        # interface (Structure_2).  Keep both normalizations and make the
+        # shared gate's choice explicit; never silently collapse them with
+        # max(score_1, score_2).
+        "tm_score_query": tm_score_1,
+        "tm_score_ref": tm_score_2,
+        "tm_score": tm_score_2,
+        "tm_score_contract": "reference_normalized_structure_2",
+        "status": mapping_status,
+        "alignment_lengths": {"seq1": len(seq1), "match": len(match), "seq2": len(seq2)},
+        "aligner": aligner_name,
+        "raw_output_sha256": raw_output_sha256,
+        "return_code": return_code,
     }
-    with open(f"processed/alignment/{protein}_{template}_{chain}.json", "w") as f:
+    os.makedirs(output_dir, exist_ok=True)
+    with open(os.path.join(output_dir, f"{protein}_{template}_{chain}.json"), "w") as f:
         json.dump(multi_dict, f)
 
 def extract_chain_and_res_ids(name, path):
@@ -108,13 +239,54 @@ def extract_chain_and_res_ids(name, path):
                     chain_id.append(chain.id)
     return residue_ids, chain_id
 
+
+def _has_ca_atoms(path):
+    if not os.path.exists(path):
+        return False
+    with open(path, "r") as handle:
+        return any(line.startswith("ATOM") and line[13:15].strip() == "CA" for line in handle)
+
+
+def _valid_tmalign_outputs(matrix_path, tm_path):
+    """Require the minimal records consumed by ``parse_tmalign``."""
+    try:
+        with open(matrix_path, "r") as matrix_handle, open(tm_path, "r") as tm_handle:
+            matrix_text = matrix_handle.read()
+            tm_text = tm_handle.read()
+    except OSError:
+        return False
+    matrix_rows = set()
+    for line in matrix_text.splitlines():
+        tokens = line.split()
+        if len(tokens) >= 5 and tokens[0] in {"0", "1", "2"}:
+            matrix_rows.add(tokens[0])
+    alignment_marker = any(line.startswith('(":') for line in tm_text.splitlines())
+    return matrix_rows == {"0", "1", "2"} and "Aligned length" in tm_text and "TM-score" in tm_text and alignment_marker
+
+
+def _write_empty_alignment(
+    path, *, return_code=None, raw_output_sha256=None, error_reason=None
+):
+    with open(path, "w") as handle:
+        json.dump({
+            "match_count": 0,
+            "translation": [0.0, 0.0, 0.0],
+            "rotation_mat": [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+            "match_dict": {},
+            "tm_score": 0.0,
+            "status": "alignment_unavailable",
+            "return_code": return_code,
+            "raw_output_sha256": raw_output_sha256,
+            "error_reason": error_reason,
+        }, handle)
+
 if __name__ == "__main__":
     protein = "1a28"
     template = "1a28AB"
     chains = ["A", "B"]
     align([protein], [template])
     for chain in chains:
-        data = json.load(open(f"processed/alignment/{protein}_{template}_{chain}.json", "r"))
+        data = json.load(open(f"processed/alignment_tmalign/{protein}_{template}_{chain}.json", "r"))
         print(f"--- {protein}_{template}_{chain} ---")
         print(data)
         print()

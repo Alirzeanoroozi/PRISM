@@ -1,4 +1,5 @@
 import json
+import hashlib
 import os
 import re
 import shutil
@@ -18,6 +19,7 @@ def align_gtalign(
     pre_score=0.0,
     speed=0,
     refinement=3,
+    min_match_count=None,
 ):
     """
     GTalign-backed alignment stage that writes PRISM-compatible JSONs.
@@ -26,6 +28,8 @@ def align_gtalign(
     intact. Downstream stages can read the generated JSONs from output_dir.
     """
     output_dir = Path(output_dir)
+    if output_dir.exists() and any(output_dir.iterdir()):
+        raise RuntimeError(f"refusing to reuse non-empty GTalign output directory: {output_dir}")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     selected_query_paths = {}
@@ -50,6 +54,7 @@ def align_gtalign(
         raise RuntimeError("GTalign alignment stage: no valid query/reference files found.")
 
     parsed_pairs = set()
+    raw_hash_by_protein = {}
     with tempfile.TemporaryDirectory(prefix="gtalign_prism_stage_", dir="processed") as td:
         td = Path(td)
         qdir = td / "queries"
@@ -74,6 +79,13 @@ def align_gtalign(
             ref_basename_to_real[dst.name] = str(src)
             ref_basename_to_key[dst.name] = key
 
+        # Honor the CLI-provided pre-filter unless the environment explicitly
+        # overrides it.  GTalign reports ALL hits when --pre-score=0.0,
+        # producing 50+ MB output files per query that take hours to parse in
+        # Python.  A moderate threshold keeps raw output manageable; the
+        # downstream transformer() stage independently enforces the full
+        # production thresholds, so no double-filtering leak occurs.
+        pre_score = float(os.environ.get("PRISM_GTALIGN_PRE_SCORE", str(pre_score)))
         cmd = [
             str(gtalign_path),
             f"--qrs={qdir}",
@@ -82,10 +94,15 @@ def align_gtalign(
             str(outdir),
             "-s",
             "0",
-            f"--nhits={len(selected_ref_paths)}",
-            f"--nalns={len(selected_ref_paths)}",
+            # Limit output to GTalign's default of 2000 hits per query.
+            # Using len(selected_ref_paths)=39710 would dump ALL hits into
+            # 50+ MB output files that the Python parser takes hours to
+            # process.  With --pre-score=0.2, the top 2000 hits per query
+            # capture all potentially useful candidates.
+            f"--nhits=2000",
+            f"--nalns=2000",
             f"--dev-min-length={int(dev_min_length)}",
-            f"--pre-score={float(pre_score)}",
+            f"--pre-score={pre_score}",
         ]
         if speed is not None:
             cmd.append(f"--speed={int(speed)}")
@@ -97,7 +114,12 @@ def align_gtalign(
             raise RuntimeError(f"GTalign failed ({result.returncode}): {(result.stderr or result.stdout)[:2000]}")
 
         for out_file in sorted(outdir.glob("*.out")):
-            query_path, hits = parse_gtalign_output_text(out_file.read_text(errors="replace"))
+            raw_output_sha256 = hashlib.sha256(out_file.read_bytes()).hexdigest()
+            try:
+                query_path, hits = parse_gtalign_output_text(out_file.read_text(errors="replace"))
+            except (ValueError, IndexError, KeyError, TypeError, AttributeError) as exc:
+                print(f"Skipping malformed GTalign output {out_file}: {exc}")
+                continue
             qbase = os.path.basename(query_path)
             if not qbase.endswith(".asa.pdb"):
                 print(f"Skipping unexpected GTalign query filename: {qbase}")
@@ -107,6 +129,7 @@ def align_gtalign(
             if not protein_path:
                 print(f"GTalign query not mapped to PRISM input: {qbase}")
                 continue
+            raw_hash_by_protein[protein] = raw_output_sha256
 
             for hit in hits:
                 ref_base = os.path.basename(hit["ref_path"])
@@ -121,8 +144,27 @@ def align_gtalign(
                     interface_path,
                 )
                 tm_candidates = [v for v in (hit["tm_ref"], hit["tm_query"]) if isinstance(v, (float, int))]
-                tm_score = max(tm_candidates) if tm_candidates else 0.0
+                tm_score = max(tm_candidates) if len(tm_candidates) == 2 else 0.0
                 match_count = hit["aligned_length"] or len(match_dict)
+
+                # Pre-filter: skip writing JSON for low-quality hits.
+                # Honor the CLI pre-score unless the environment overrides it.
+                # The downstream transformer() stage independently enforces
+                # the full production thresholds.
+                min_tm = float(os.environ.get("PRISM_GTALIGN_PRE_SCORE", str(pre_score)))
+                min_matches = (
+                    int(min_match_count)
+                    if min_match_count is not None
+                    else int(os.environ.get("PRISM_MINIMUM_RESIDUE_MATCH_COUNT", "15"))
+                )
+                if (
+                    len(tm_candidates) != 2
+                    or min(tm_candidates) < min_tm
+                    or match_count < min_matches
+                ):
+                    parsed_pairs.add((protein, template, chain))
+                    continue
+
                 write_alignment_json(
                     output_dir,
                     protein,
@@ -133,25 +175,15 @@ def align_gtalign(
                     hit["rotation_mat"],
                     match_dict,
                     tm_score,
+                    tm_score_ref=hit.get("tm_ref"),
+                    tm_score_query=hit.get("tm_query"),
+                    raw_output_sha256=raw_output_sha256,
+                    return_code=result.returncode,
                 )
                 parsed_pairs.add((protein, template, chain))
 
-    # Preserve PRISM downstream expectations: one JSON per pair.
-    for protein in queries:
-        for template in templates:
-            for chain in template[4:]:
-                if (protein, template, chain) not in parsed_pairs:
-                    write_alignment_json(
-                        output_dir,
-                        protein,
-                        template,
-                        chain,
-                        0,
-                        [0.0, 0.0, 0.0],
-                        [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
-                        {},
-                        0.0,
-                    )
+    # Only write JSONs for actual hits.  transformer.py handles
+    # missing files gracefully via try/except around load_alignment().
 
 
 def build_match_dict_from_aligned_sequences(query_seq, ref_seq, protein_path, interface_path):
@@ -192,16 +224,61 @@ def extract_chain_and_res_ids(name, path):
     return residue_ids, chain_ids
 
 
-def write_alignment_json(out_dir, protein, template, chain, match_count, translation, rotation_mat, match_dict, tm_score):
+def write_alignment_json(
+    out_dir,
+    protein,
+    template,
+    chain,
+    match_count,
+    translation,
+    rotation_mat,
+    match_dict,
+    tm_score,
+    *,
+    tm_score_ref=None,
+    tm_score_query=None,
+    raw_output_sha256=None,
+    return_code=None,
+    status="success",
+):
     payload = {
         "match_count": int(match_count) if match_count is not None else 0,
         "translation": translation or [0.0, 0.0, 0.0],
         "rotation_mat": rotation_mat or [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
         "match_dict": match_dict or {},
         "tm_score": float(tm_score) if tm_score is not None else 0.0,
+        "tm_score_ref": tm_score_ref,
+        "tm_score_query": tm_score_query,
+        "raw_output_sha256": raw_output_sha256,
+        "return_code": return_code,
+        "aligner": "GTalign",
+        "status": status,
     }
     with open(Path(out_dir) / f"{protein}_{template}_{chain}.json", "w") as f:
         json.dump(payload, f)
+
+
+def parse_gtalign_hits(raw_output, *, min_tm_score=0.4, min_match_count=15):
+    """Parse and filter GTAlign hit records without fabricating missing hits."""
+
+    if isinstance(raw_output, str):
+        _, hits = parse_gtalign_output_text(raw_output)
+    else:
+        hits = list(raw_output)
+    accepted = []
+    for hit in hits:
+        if not isinstance(hit, dict):
+            continue
+        tm_candidates = [value for value in (hit.get("tm_ref"), hit.get("tm_query")) if isinstance(value, (int, float))]
+        tm_score = max(tm_candidates, default=0.0)
+        match_count = hit.get("aligned_length") or 0
+        if (
+            len(tm_candidates) == 2
+            and min(tm_candidates) >= float(min_tm_score)
+            and int(match_count) >= int(min_match_count)
+        ):
+            accepted.append({**hit, "tm_score": tm_score, "status": "accepted"})
+    return accepted
 
 
 def _symlink_or_copy(src, dst):
@@ -239,13 +316,30 @@ def _extract_gtalign_query_path(lines):
 
 
 def _parse_gtalign_hit_block(lines, start_idx):
+    """Parse a single GTalign hit block from plain text output.
+
+    GTalign plain text hit format:
+        [spaces]N ...path/to/file.pdb Chn:X tm_score_query tm_score_ref rmsd n_aligned ...
+    """
     i = start_idx
     while i < len(lines) and not lines[i].strip():
         i += 1
-    if i >= len(lines) or not lines[i].lstrip().startswith(">"):
+    if i >= len(lines):
+        return None, i
+
+    line = lines[i]
+    # Check if this is a hit summary line (starts with spaces, then number, then dots)
+    if not re.match(r"^\s*\d+\s*\.\s*$", line):
         return None, i + 1
 
-    ref_path = lines[i].strip()[1:].split(" Chn:", 1)[0].strip()
+    # GTalign 0.19 emits the reference path on the line immediately after
+    # the numbered hit marker (prefixed with ``>``).  Older output placed it
+    # on the marker line itself, so accept both forms.
+    ref_path = ""
+    inline_path = line.strip().split("...", 1)
+    if len(inline_path) == 2:
+        ref_path = inline_path[1].split(" Chn:", 1)[0].strip()
+
     i += 1
 
     hit = {
@@ -263,6 +357,11 @@ def _parse_gtalign_hit_block(lines, start_idx):
 
     while i < len(lines):
         line = lines[i]
+        if not ref_path and line.lstrip().startswith(">"):
+            ref_path = line.lstrip()[1:].split(" Chn:", 1)[0].strip()
+            hit["ref_path"] = ref_path
+            i += 1
+            continue
         if re.match(r"^\s*\d+\.\s*$", line) or line.startswith("Query length:"):
             break
 
@@ -323,8 +422,10 @@ def parse_gtalign_output_text(text):
     hits = []
     i = 0
     while i < len(lines):
-        if re.match(r"^\s*\d+\.\s*$", lines[i]):
-            hit, i = _parse_gtalign_hit_block(lines, i + 1)
+        # Match lines like "     1 ...tes/interfaces/..." (number, spaces, then dots/content)
+        # GTalign output format: spaces + number + spaces + dots + path
+        if re.match(r"^\s*\d+\s*\.\s*$", lines[i]):
+            hit, i = _parse_gtalign_hit_block(lines, i)
             if hit:
                 hits.append(hit)
             continue

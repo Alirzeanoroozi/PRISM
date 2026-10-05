@@ -51,3 +51,15 @@ def test_legacy_spellings_and_defaults_remain_supported():
 
 def test_no_refine_explicitly_skips_prescript_default():
     assert prism.build_parser().parse_args(["--no-refine"]).refine is False
+
+
+def test_usalign_provider_options_are_explicit():
+    args = prism.build_parser().parse_args([
+        "--aligner", "usalign",
+        "--usalign-path", "/tools/USalign",
+        "--usalign-fast",
+    ])
+
+    assert args.aligner == "usalign"
+    assert args.usalign_path == "/tools/USalign"
+    assert args.usalign_fast is True

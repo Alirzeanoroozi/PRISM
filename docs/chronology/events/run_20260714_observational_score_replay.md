@@ -1,0 +1,51 @@
+# 2026-07-14: 20260714-observational-score-replay
+
+- Event ID: `run_20260714_observational_score_replay`
+- Kind: `run`
+- Source: `tmp/agent/20260714-observational-score-replay`
+- Date evidence: `tmp/agent directory prefix`
+- Recorded status: `no_terminal_status`
+- Excluded vendor/cache files under this source: 0
+
+## Selected evidence paths
+
+- `tmp/agent/20260714-observational-score-replay/replay_manifest.json`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355863_1.err`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355863_1.out`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355863_10.err`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355863_10.out`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355863_2.err`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355863_2.out`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355863_3.err`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355863_3.out`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355863_4.err`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355863_4.out`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355863_5.err`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355863_5.out`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355863_6.err`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355863_6.out`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355863_7.err`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355863_7.out`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355863_8.err`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355863_8.out`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355863_9.err`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355863_9.out`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355873_1.err`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355873_1.out`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355873_10.err`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355873_10.out`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355873_2.err`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355873_2.out`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355873_3.err`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355873_3.out`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355873_4.err`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355873_4.out`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355873_5.err`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355873_5.out`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355873_6.err`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355873_6.out`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355873_7.err`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355873_7.out`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355873_8.err`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355873_8.out`
+- `tmp/agent/20260714-observational-score-replay/slurm-1355873_9.err`

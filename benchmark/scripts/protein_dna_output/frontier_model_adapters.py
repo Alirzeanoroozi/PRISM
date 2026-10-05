@@ -340,6 +340,33 @@ def alphafold3_supported_gpu():
     return False, f"unsupported_gpu_family:{';'.join(lines)}"
 
 
+def alphafold3_database_root():
+    """Return the AF3 database root path, preferring PRISM_AF3_DB_DIR env var."""
+    env_root = os.environ.get("PRISM_AF3_DB_DIR")
+    if env_root:
+        return Path(env_root)
+    return Path("/datasets/alphafold3")
+
+
+def alphafold3_database_available():
+    """Check whether the AF3 database directory exists with key files."""
+    db_root = alphafold3_database_root()
+    if not db_root.is_dir():
+        return False, f"missing_af3_database_root:{db_root}"
+    marker = db_root / "bfd-first_non_consensus_sequences.fasta"
+    if marker.is_file():
+        return True, str(db_root)
+    return False, f"missing_af3_database_root:{db_root}"
+
+
+def alphafold3_model_root():
+    """Return the AF3 model weights path, preferring PRISM_AF3_MODEL_DIR env var."""
+    env_root = os.environ.get("PRISM_AF3_MODEL_DIR")
+    if env_root:
+        return Path(env_root)
+    return Path("/datasets/alphafold3/models")
+
+
 def boltz_runtime_env(binary_path):
     env = os.environ.copy()
     if not binary_path:
@@ -363,6 +390,9 @@ def boltz_runtime_env(binary_path):
 
 def probe_tool(tool, python_executable=sys.executable):
     if tool.get("tool_id") == "alphafold3":
+        db_available, db_reason = alphafold3_database_available()
+        if not db_available:
+            return AdapterAvailability(available=False, reason=db_reason)
         if alphafold3_container_available():
             wrapper_path = Path("/opt/ohpc/pub/apps/alphafold/3.0.1/alphafold")
             sif_path = Path("/opt/ohpc/pub/apps/alphafold/3.0.1/alphafold3.sif")
@@ -372,9 +402,12 @@ def probe_tool(tool, python_executable=sys.executable):
                 return AdapterAvailability(available=True, binary_path=str(sif_path))
 
     binary_path = resolve_binary(tool, python_executable=python_executable)
-    if binary_path:
-        return AdapterAvailability(available=True, binary_path=binary_path)
     module_name = tool.get("python_module", "")
+    if binary_path:
+        if module_name and _python_module_available(python_executable, module_name):
+            return AdapterAvailability(available=True, binary_path=binary_path)
+        if not module_name:
+            return AdapterAvailability(available=True, binary_path=binary_path)
     if module_name and _python_module_available(python_executable, module_name):
         if tool.get("tool_id") == "rosettafold_all_atom":
             return AdapterAvailability(available=True, module_name=module_name)
@@ -448,6 +481,18 @@ def normalize_structure_chains(model_path, output_path, protein_chain_ids, dna_c
     io.set_structure(structure)
     io.save(str(output_path))
     return str(output_path)
+
+
+def normalize_prediction_file(path, output_path, manifest_row):
+    """Normalize prediction chain names to match manifest chain IDs.
+
+    Wraps normalize_structure_chains with a manifest-row interface.
+    """
+    return normalize_structure_chains(
+        path, output_path,
+        manifest_row.get("protein_chain_ids", ""),
+        manifest_row.get("dna_chain_ids", ""),
+    )
 
 
 def candidate_model_files(output_dir):

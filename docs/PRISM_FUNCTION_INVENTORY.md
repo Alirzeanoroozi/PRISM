@@ -17,6 +17,7 @@ src/
 ├── alignment_gtalign.py
 ├── alignment_multiprot.py
 ├── analyse_pdbs.py
+├── artifact_ledger.py
 ├── candidate_audit.py
 ├── candidate_ranker.py
 ├── candidate_selector.py
@@ -38,6 +39,7 @@ src/
 ├── multiprot_pyrosetta.py
 ├── naccess_utils.py
 ├── pdb_download.py
+├── pipeline_inputs.py
 ├── prodigy_ranker.py
 ├── provenance/__init__.py
 ├── provenance/run_evidence.py
@@ -46,12 +48,17 @@ src/
 ├── ranking_metrics.py
 ├── residue_contact_model.py
 ├── rosetta_refinement.py
+├── run_identity.py
 ├── sasa_utils.py
+├── stepwise_analysis.py
+├── structural_aligner.py
 ├── surface_extract.py
 ├── template_filtering.py
 ├── template_generate.py
 ├── transformation.py
+├── transformation_config.py
 ├── utils.py
+├── validation_gate.py
 ```
 
 ## Function and class inventory
@@ -60,11 +67,13 @@ src/
 
 | Kind | Qualified name | Line | Signature / description |
 | --- | --- | ---: | --- |
-| function | `parse_bool` | 23 | `value` — Parse CLI booleans without Python's bool('false') trap. |
-| function | `record_stage_event` | 35 | `stage, event, return_code=None, detail=''` — Append an opt-in, machine-readable pipeline stage event. |
-| function | `run_stage` | 54 | `stage, operation` |
-| function | `main` | 64 | `args` |
-| function | `build_parser` | 223 | — |
+| function | `parse_bool` | 25 | `value` — Parse CLI booleans without Python's bool('false') trap. |
+| function | `record_stage_event` | 37 | `stage, event, return_code=None, detail=''` — Append an opt-in, machine-readable pipeline stage event. |
+| function | `run_stage` | 56 | `stage, operation` |
+| function | `threshold_overrides_from_args` | 86 | `args` — Return only explicitly supplied transformation threshold options. |
+| function | `main` | 95 | `args` |
+| function | `main.transform_operation` | 206 | — |
+| function | `build_parser` | 283 | — |
 
 ### `src/__init__.py`
 
@@ -74,30 +83,30 @@ _No classes or functions defined in this module._
 
 | Kind | Qualified name | Line | Signature / description |
 | --- | --- | ---: | --- |
-| function | `iter_bounded_results` | 11 | `tasks, worker, workers, max_pending=None` — Yield one result per task while bounding submitted-but-unfinished work. |
-| function | `_align_one` | 34 | `args` — Align one (protein, template, chain) pair for parallel dispatch. |
-| function | `align` | 72 | `queries, templates` |
-| function | `parse_tmalign` | 89 | `protein_path, interface_path, protein, template, chain, matrix_path=None, tm_path=None, output_dir='processed/alignment'` |
-| function | `extract_chain_and_res_ids` | 176 | `name, path` |
-| function | `_has_ca_atoms` | 190 | `path` |
-| function | `_valid_tmalign_outputs` | 197 | `matrix_path, tm_path` — Require the minimal records consumed by ``parse_tmalign``. |
-| function | `_write_empty_alignment` | 214 | `path` |
+| function | `iter_bounded_results` | 10 | `tasks, worker, workers, max_pending=None` — Yield one result per task while bounding submitted-but-unfinished work. |
+| function | `_align_one` | 33 | `args` — Align one (protein, template, chain) pair for parallel dispatch. |
+| function | `align` | 84 | `queries, templates, output_dir='processed/alignment_tmalign'` |
+| function | `parse_tmalign` | 101 | `protein_path, interface_path, protein, template, chain, matrix_path=None, tm_path=None, output_dir='processed/alignment_tmalign', *, raw_output_sha256=None, return_code=None` |
+| function | `extract_chain_and_res_ids` | 195 | `name, path` |
+| function | `_has_ca_atoms` | 209 | `path` |
+| function | `_valid_tmalign_outputs` | 216 | `matrix_path, tm_path` — Require the minimal records consumed by ``parse_tmalign``. |
+| function | `_write_empty_alignment` | 233 | `path, *, return_code=None, raw_output_sha256=None, error_reason=None` |
 
 ### `src/alignment_gtalign.py`
 
 | Kind | Qualified name | Line | Signature / description |
 | --- | --- | ---: | --- |
-| function | `align_gtalign` | 13 | `queries, templates, gtalign_path='gtalign', output_dir='processed/alignment_gtalign', dev_min_length=3, pre_score=0.0, speed=0, refinement=3` — GTalign-backed alignment stage that writes PRISM-compatible JSONs. This is a separate implementation to keep the original TMalign pipeline intact. Downstream stages can read the ge |
-| function | `build_match_dict_from_aligned_sequences` | 181 | `query_seq, ref_seq, protein_path, interface_path` |
-| function | `extract_chain_and_res_ids` | 205 | `name, path` |
-| function | `write_alignment_json` | 219 | `out_dir, protein, template, chain, match_count, translation, rotation_mat, match_dict, tm_score, *, tm_score_ref=None, tm_score_query=None, raw_output_sha256=None, status='success'` |
-| function | `parse_gtalign_hits` | 251 | `raw_output, *, min_tm_score=0.4, min_match_count=15` — Parse and filter GTAlign hit records without fabricating missing hits. |
-| function | `_symlink_or_copy` | 270 | `src, dst` |
-| function | `_extract_floats` | 277 | `line` |
-| function | `_extract_gtalign_alignment_seq` | 281 | `line, label` |
-| function | `_extract_gtalign_query_path` | 292 | `lines` |
-| function | `_parse_gtalign_hit_block` | 304 | `lines, start_idx` — Parse a single GTalign hit block from plain text output. GTalign plain text hit format: [spaces]N ...path/to/file.pdb Chn:X tm_score_query tm_score_ref rmsd n_aligned ... |
-| function | `parse_gtalign_output_text` | 395 | `text` |
+| function | `align_gtalign` | 13 | `queries, templates, gtalign_path='gtalign', output_dir='processed/alignment_gtalign', dev_min_length=3, pre_score=0.0, speed=0, refinement=3, min_match_count=None` — GTalign-backed alignment stage that writes PRISM-compatible JSONs. This is a separate implementation to keep the original TMalign pipeline intact. Downstream stages can read the ge |
+| function | `build_match_dict_from_aligned_sequences` | 189 | `query_seq, ref_seq, protein_path, interface_path` |
+| function | `extract_chain_and_res_ids` | 213 | `name, path` |
+| function | `write_alignment_json` | 227 | `out_dir, protein, template, chain, match_count, translation, rotation_mat, match_dict, tm_score, *, tm_score_ref=None, tm_score_query=None, raw_output_sha256=None, return_code=None, status='success'` |
+| function | `parse_gtalign_hits` | 261 | `raw_output, *, min_tm_score=0.4, min_match_count=15` — Parse and filter GTAlign hit records without fabricating missing hits. |
+| function | `_symlink_or_copy` | 284 | `src, dst` |
+| function | `_extract_floats` | 291 | `line` |
+| function | `_extract_gtalign_alignment_seq` | 295 | `line, label` |
+| function | `_extract_gtalign_query_path` | 306 | `lines` |
+| function | `_parse_gtalign_hit_block` | 318 | `lines, start_idx` — Parse a single GTalign hit block from plain text output. GTalign plain text hit format: [spaces]N ...path/to/file.pdb Chn:X tm_score_query tm_score_ref rmsd n_aligned ... |
+| function | `parse_gtalign_output_text` | 417 | `text` |
 
 ### `src/alignment_multiprot.py`
 
@@ -105,11 +114,13 @@ _No classes or functions defined in this module._
 | --- | --- | ---: | --- |
 | function | `_check_seccomp` | 51 | Check if seccomp is enabled (blocks 32-bit binaries like MultiProt). Returns True if MultiProt can run, False if seccomp blocks it. |
 | function | `_parse_multiprot_solution` | 72 | `sol_res_path` — Parse MultiProt's 2_sol.res to extract the best alignment solution. Returns (match_dict, rmsd) where match_dict maps interface residues to query residues as {interface_chain.res_ty |
-| function | `_parse_pdb_coords_by_resnum` | 146 | `pdb_path` — Parse CA coordinates keyed by resnum (int), ignoring chain ID. MultiProt labels molecules by molecule index (0, 1), not PDB chain IDs. We match by residue number plus amino acid to |
-| function | `_compute_transform_from_matches` | 168 | `match_dict, query_path, interface_path` — Compute rotation and translation from the matched residue pairs using Kabsch algorithm. MultiProt labels residues as MolID.AA.ResNum where MolID is molecule index (0=first file=que |
-| function | `_compute_transform_from_matches._mp_key_to_res` | 181 | `mp_key` |
-| function | `_align_one` | 244 | `task` — Align one (query, template, chain) pair using only MultiProt. Runs MultiProt for structural alignment, parses the residue correspondence and computes the rotation/translation matri |
-| function | `align_multiprot` | 359 | `queries, templates, output_dir='processed/alignment', max_workers=8, multiprot_path=None` — MultiProt alignment entry point for the PRISM pipeline. Aligns query proteins against template interfaces using MultiProt for structural alignment, then TMalign for rotation/transf |
+| function | `_parse_multiprot_solutions` | 137 | `sol_res_path, max_solutions=3` — Parse the first legacy MultiProt solutions from ``2_sol.res``. The legacy pipeline retained the solver's reference molecule, six-value ``Trans`` vector, and up to three corresponde |
+| function | `_legacy_solution_to_alignment` | 201 | `solution` — Convert one legacy MultiProt solution to the current JSON transform. Legacy ``pdbTransform`` operates on row vectors. The current PDB writer applies a matrix to column coordinates, |
+| function | `_parse_pdb_coords_by_resnum` | 266 | `pdb_path` — Parse CA coordinates keyed by resnum (int), ignoring chain ID. MultiProt labels molecules by molecule index (0, 1), not PDB chain IDs. We match by residue number plus amino acid to |
+| function | `_compute_transform_from_matches` | 288 | `match_dict, query_path, interface_path` — Compute rotation and translation from the matched residue pairs using Kabsch algorithm. MultiProt labels residues as MolID.AA.ResNum where MolID is molecule index (0=first file=que |
+| function | `_compute_transform_from_matches._mp_key_to_res` | 301 | `mp_key` |
+| function | `_align_one` | 364 | `task` — Align one (query, template, chain) pair using only MultiProt. Runs MultiProt for structural alignment, parses the residue correspondence and computes the rotation/translation matri |
+| function | `align_multiprot` | 568 | `queries, templates, output_dir='processed/alignment_multiprot', max_workers=8, multiprot_path=None, multiprot_mode='current', multiprot_params=None, multiprot_solutions=3` — MultiProt alignment entry point for the PRISM pipeline. Aligns query proteins against template interfaces using MultiProt for structural alignment, then TMalign for rotation/transf |
 
 ### `src/analyse_pdbs.py`
 
@@ -118,18 +129,25 @@ _No classes or functions defined in this module._
 | function | `analyse_pdb` | 11 | `filepath` |
 | function | `run_analysis` | 61 | — |
 
+### `src/artifact_ledger.py`
+
+| Kind | Qualified name | Line | Signature / description |
+| --- | --- | ---: | --- |
+| function | `write_artifact` | 23 | `args: argparse.Namespace` — Write an artifact observation to the ledger. |
+| function | `main` | 61 | `argv: list[str] \| None=None` |
+
 ### `src/candidate_audit.py`
 
 | Kind | Qualified name | Line | Signature / description |
 | --- | --- | ---: | --- |
-| class | `CandidateRecord` | 27 | — |
-| function | `CandidateRecord.__post_init__` | 48 | `self` |
-| function | `CandidateRecord.to_dict` | 54 | `self` |
-| function | `alignment_features` | 58 | `alignment: Mapping[str, Any], template_residue_count: Optional[int]=None` — Extract stable, numeric features from one alignment JSON object. |
-| class | `CandidateAudit` | 76 | Append candidate records without changing pipeline acceptance logic. |
-| function | `CandidateAudit.__init__` | 79 | `self, path: str` |
-| function | `CandidateAudit.write` | 85 | `self, record: CandidateRecord` |
-| function | `record_alignment_pair` | 90 | `audit: CandidateAudit, *, query_left: str, query_right: str, template: str, chain_left: str, chain_right: str, orientation: str, left_alignment: Mapping[str, Any], right_alignment: Mapping[str, Any], template_size_left: Optional[int]=None, template_size_right: Optional[int]=None, metadata: Optional[Mapping[str, Any]]=None, status: str='generated'` |
+| class | `CandidateRecord` | 30 | — |
+| function | `CandidateRecord.__post_init__` | 51 | `self` |
+| function | `CandidateRecord.to_dict` | 57 | `self` |
+| function | `alignment_features` | 61 | `alignment: Mapping[str, Any], template_residue_count: Optional[int]=None` — Extract stable, numeric features from one alignment JSON object. |
+| class | `CandidateAudit` | 79 | Append candidate records without changing pipeline acceptance logic. |
+| function | `CandidateAudit.__init__` | 82 | `self, path: str` |
+| function | `CandidateAudit.write` | 88 | `self, record: CandidateRecord` |
+| function | `record_alignment_pair` | 93 | `audit: CandidateAudit, *, query_left: str, query_right: str, template: str, chain_left: str, chain_right: str, orientation: str, left_alignment: Mapping[str, Any], right_alignment: Mapping[str, Any], template_size_left: Optional[int]=None, template_size_right: Optional[int]=None, metadata: Optional[Mapping[str, Any]]=None, status: str='generated'` |
 
 ### `src/candidate_ranker.py`
 
@@ -261,13 +279,13 @@ _No classes or functions defined in this module._
 
 | Kind | Qualified name | Line | Signature / description |
 | --- | --- | ---: | --- |
-| function | `_check_tools` | 32 | Verify that all required FiberDock tools are available. |
-| function | `_add_hydrogens` | 47 | `pdb_path, output_dir` — Add hydrogens to a PDB using Reduce. |
-| function | `_create_ca_pdb` | 86 | `pdb_path, output_dir` — Create a CA-only PDB for NMA input. |
-| function | `_run_nma` | 110 | `ca_path, output_dir, normal_modes=50` — Run Normal Mode Analysis. |
-| function | `_build_fiberdock_params` | 129 | `receptor_hb, ligand_hb, output_dir, receptor, ligand` — Build FiberDock parameter file. receptor_hb/ligand_hb: Paths to hydrogenated PDBs (legacy .HB format). Must run from FIBERDOCK_DIR so FindBin resolves lib/ correctly. |
-| function | `_run_fiberdock` | 167 | `params_file, fiberdock_dir, output_dir, receptor, ligand` — Run FiberDock energy calculation. FiberDock must run from its own directory to find lib/ files. It creates output files (paramName.ref, paramName.pdb) in CWD. |
-| function | `refine_pairs` | 209 | `passed_pairs` — FiberDock refinement entry point. Args: passed_pairs: List of (ligand_pdb, receptor_pdb) tuples from transformer. |
+| function | `_check_tools` | 38 | Verify that all required FiberDock tools are available. |
+| function | `_add_hydrogens` | 53 | `pdb_path, output_dir` — Add hydrogens to a PDB using Reduce. |
+| function | `_create_ca_pdb` | 92 | `pdb_path, output_dir` — Create a CA-only PDB for NMA input. |
+| function | `_run_nma` | 116 | `ca_path, output_dir, normal_modes=50` — Run Normal Mode Analysis. |
+| function | `_build_fiberdock_params` | 135 | `receptor_hb, ligand_hb, output_dir, receptor, ligand` — Build FiberDock parameter file. receptor_hb/ligand_hb: Paths to hydrogenated PDBs (legacy .HB format). Must run from FIBERDOCK_DIR so FindBin resolves lib/ correctly. |
+| function | `_run_fiberdock` | 173 | `params_file, fiberdock_dir, output_dir, receptor, ligand, pair_name=None` — Run FiberDock energy calculation. FiberDock must run from its own directory to find lib/ files. It creates output files (paramName.ref, paramName.pdb) in CWD. |
+| function | `refine_pairs` | 235 | `passed_pairs` — FiberDock refinement entry point. Args: passed_pairs: List of (ligand_pdb, receptor_pdb) tuples from transformer. |
 
 ### `src/freesasa_runner.py`
 
@@ -313,11 +331,12 @@ _No classes or functions defined in this module._
 | Kind | Qualified name | Line | Signature / description |
 | --- | --- | ---: | --- |
 | function | `_surface_backend` | 14 | — |
-| function | `get_asa_complex` | 23 | `template, save_directory` |
-| function | `get_asa_complex_target` | 50 | `template, save_directory` |
-| function | `_relative_areas` | 77 | `areas, allowed_chains` |
-| function | `run_freesasa` | 94 | `template, save_directory, is_target=False` |
-| function | `run_naccess` | 120 | `template, save_directory, is_target=False` |
+| function | `_split_chain_resnum` | 23 | `chain_token` — Split a NACCESS RES chain column into (chain, residue_number). For ordinary structures the column is just the chain (e.g. ``A``), but for structures with 4-digit residue numbers (> |
+| function | `get_asa_complex` | 40 | `template, save_directory` |
+| function | `get_asa_complex_target` | 67 | `template, save_directory` |
+| function | `_relative_areas` | 95 | `areas, allowed_chains` |
+| function | `run_freesasa` | 115 | `template, save_directory, is_target=False` |
+| function | `run_naccess` | 150 | `template, save_directory, is_target=False` |
 
 ### `src/pdb_download.py`
 
@@ -330,6 +349,14 @@ _No classes or functions defined in this module._
 | function | `download_pdb_file` | 79 | `pdb_name, pdb_dir` |
 | function | `materialize_chain_pdb` | 100 | `target` — Backward-compatible wrapper for the old single-chain helper. |
 | function | `pdb_downloader` | 104 | `inputs_csv=None` — Download targets declared by *inputs_csv* or the configured default. |
+
+### `src/pipeline_inputs.py`
+
+| Kind | Qualified name | Line | Signature / description |
+| --- | --- | ---: | --- |
+| function | `normalize_template_ids` | 10 | `values` — Normalize template IDs from CLI tokens or a plain-text manifest. Current PRISM template IDs are four-character PDB IDs followed by two chain IDs. Comma-separated CLI values are acc |
+| function | `read_template_list` | 36 | `path` — Read a six-character template ID per non-comment line. |
+| function | `select_templates` | 49 | `default_templates, *, explicit_templates=None, template_list_path=None, template_limit=None` — Select the template panel while preserving the current default. ``explicit_templates`` takes precedence over a list path; callers should normally enforce mutual exclusion at the CL |
 
 ### `src/prodigy_ranker.py`
 
@@ -409,7 +436,8 @@ _No classes or functions defined in this module._
 | function | `PyRosettaRefinementAdapter.refine` | 171 | `self, input_pdb: str \| os.PathLike[str], output_pdb: str \| os.PathLike[str], *, partners: str='A_B'` |
 | function | `PyRosettaRefinementAdapter._make_protocol` | 263 | `self, module: Any, pose: Any, scorefxn: Any, partners: str` |
 | function | `refine` | 289 | `input_pdb: str \| os.PathLike[str], output_pdb: str \| os.PathLike[str], *, partners: str='A_B', init_options: str='-mute all'` — Refine one explicit PDB through PyRosetta only. |
-| function | `refine_pairs` | 305 | `passed_pairs: list[tuple[str \| os.PathLike[str], str \| os.PathLike[str]]], *, output_root: str \| os.PathLike[str]='processed/pyrosetta_refinement', init_options: str \| None=None` — Refine transformed receptor/ligand pairs through PyRosetta only. The input pair is combined using the same chain-preserving helper used by the external Rosetta backend. Each result |
+| function | `_combine_partners` | 305 | `left_path, right_path, output_root` — Combine two transformed partner PDBs into a single chain-renamed PDB. This mirrors the external Rosetta backend's combine logic but writes into PyRosetta's OWN output_root, keeping |
+| function | `refine_pairs` | 338 | `passed_pairs: list[tuple[str \| os.PathLike[str], str \| os.PathLike[str]]], *, output_root: str \| os.PathLike[str]='processed/pyrosetta_refinement', init_options: str \| None=None` — Refine transformed receptor/ligand pairs through PyRosetta only. Each result is written to an isolated structure directory and retains the adapter's JSON provenance record. The com |
 
 ### `src/ranking_data.py`
 
@@ -449,6 +477,16 @@ _No classes or functions defined in this module._
 | function | `source_chain_id` | 146 | `path` — Return target chain from filename, or first ATOM chain for generic files. |
 | function | `partner_chain_ids` | 157 | `left_path, right_path` — Return unique Rosetta chain groups for the two transformed partners. |
 
+### `src/run_identity.py`
+
+| Kind | Qualified name | Line | Signature / description |
+| --- | --- | ---: | --- |
+| function | `_load_pairs` | 23 | `pairs_path: str` — Load pair IDs from file (one per line, skip empty/comments). |
+| function | `_load_template_inventory` | 34 | `template_dir: str \| None` — Load template inventory from directory (placeholder for future). |
+| function | `declare_contract` | 42 | `args: argparse.Namespace` — Declare a contract from user selectors + template inventory + parameters. |
+| function | `init_run` | 94 | `args: argparse.Namespace` — Initialize run identity from declared contract. |
+| function | `main` | 132 | `argv: list[str] \| None=None` |
+
 ### `src/sasa_utils.py`
 
 | Kind | Qualified name | Line | Signature / description |
@@ -457,13 +495,70 @@ _No classes or functions defined in this module._
 | function | `get_asa_complex` | 27 | `target, pdb_root` — Compute relative ASA for the requested chains of a target. `target` is `{pdb_id}{chain_letters}` (e.g. `3i6eEF`). If no chain letters are provided, all chains are returned. Returns |
 | function | `get_asa_flat` | 58 | `target, pdb_root` — Return a flat dict keyed by `RESNAME_RESNUMBER_CHAINID`. Useful for the hotspot module that pairs residue ids with contact potentials. |
 
+### `src/stepwise_analysis.py`
+
+| Kind | Qualified name | Line | Signature / description |
+| --- | --- | ---: | --- |
+| function | `sha256_file` | 38 | `path: str \| Path` — Return a file hash, or ``None`` when the artifact is unavailable. |
+| function | `load_jsonl` | 51 | `path: str \| Path` — Load JSONL while preserving malformed-line evidence. |
+| function | `read_input_pairs` | 75 | `path: str \| Path` — Read receptor/ligand selectors without silently dropping malformed rows. |
+| function | `orientation_requirements` | 99 | `query_left: str, query_right: str, template: str, orientation: str` — Return the query/template-chain assignment for one orientation. |
+| function | `_query_names` | 124 | `query: str` |
+| function | `find_alignment_file` | 133 | `run_root: str \| Path, query: str, template: str, chain: str` — Find a PRISM alignment JSON using raw and canonical query spellings. |
+| function | `_load_json` | 150 | `path: Path \| None` |
+| function | `_ca_residue_count` | 160 | `path: Path \| None` |
+| function | `template_interface_size` | 170 | `run_root: str \| Path, template: str, chain: str` |
+| function | `_coverage` | 174 | `match_count: Any, size: int \| None` |
+| function | `_alignment_contract_status` | 183 | `payload: Mapping[str, Any] \| None` — Classify whether an alignment record is safe for gate replay. |
+| function | `alignment_inventory` | 201 | `run_root: str \| Path, inputs_csv: str \| Path, templates: Iterable[str], *, arm: str, orientations: Iterable[str]=('o1', 'o2'), audit_path: str \| Path \| None=None` — Build one row per input/template/orientation alignment pair. |
+| function | `_hash_inventory` | 292 | `paths: Iterable[Path], root: Path, *, origin_by_path: Mapping[Path, str] \| None=None, include_resolved_path: bool=False` |
+| function | `_reference_hash_index` | 313 | `roots: Iterable[Path]` — Index reference bytes so copied or renamed assets do not evade provenance. |
+| function | `_asset_origins` | 328 | `paths: Iterable[Path], *, current_roots: Iterable[Path], legacy_roots: Iterable[Path]` |
+| function | `asset_provenance_manifest` | 361 | `run_root: str \| Path, inputs_csv: str \| Path, templates: Iterable[str], *, source_root: str \| Path, surface_backend: str, filter_mode: str, filter_asset_root: str \| Path \| None=None` — Capture input, source, interface, target, surface, and mix evidence. |
+| function | `_atom_records` | 458 | `path: str \| Path \| None, *, ca_only: bool=True` |
+| function | `_distance` | 481 | `left: tuple[float, float, float], right: tuple[float, float, float]` |
+| function | `clash_diagnostics` | 485 | `left_path: str \| Path, right_path: str \| Path, *, clash_distance: float=3.0, distance_grid: Iterable[float]=DEFAULT_CLASH_DISTANCE_GRID, event_grid: Iterable[int]=DEFAULT_CLASH_EVENT_GRID` — Calculate CA clash counts, locations, distance distribution, and grid replay. |
+| function | `_transformed_pair_paths` | 554 | `run_root: str \| Path, row: Mapping[str, Any]` |
+| function | `_protocol_contacts` | 571 | `filter_assets: Mapping[str, Any], left_chain: str, right_chain: str` |
+| function | `_audit_index` | 588 | `path: str \| Path \| None` |
+| function | `gate_ledger` | 596 | `run_root: str \| Path, alignment_rows: Iterable[Mapping[str, Any]], *, thresholds: Mapping[str, Any], filter_mode: str='geometry_only_experimental', filter_asset_root: str \| Path \| None=None, audit_path: str \| Path \| None=None, compute_clash_diagnostics: bool=True` — Evaluate independent gates and cumulative replay without changing outputs. |
+| function | `leave_one_gate_out` | 720 | `rows: Iterable[Mapping[str, Any]]` — Report which candidates would be rescued when one gate is omitted. |
+| function | `_chain_ids` | 739 | `path: Path \| None` |
+| function | `refinement_inventory` | 745 | `run_root: str \| Path, gate_rows: Iterable[Mapping[str, Any]]` — Validate refinement outputs without equating file count with quality. |
+| function | `candidate_key` | 790 | `record: Mapping[str, Any]` |
+| function | `_fingerprint` | 794 | `keys: Iterable[str]` |
+| function | `ranking_comparison` | 799 | `candidate_sets: Mapping[str, Iterable[str]], *, pre_ranking_sets: Mapping[str, Iterable[str]] \| None=None, native_labels: Mapping[str, bool] \| None=None, native_label_source: str \| None=None, native_label_source_sha256: str \| None=None, top_k: int=1` — Compare candidate sets; affinity is never used as a native-like label. |
+| function | `usalign_preflight` | 849 | `executable: str \| Path='USalign', *, probe: bool=False` — Check US-align availability; never claim PRISM compatibility from presence alone. |
+| function | `validate_usalign_contract` | 870 | `payload: Mapping[str, Any]` |
+
+### `src/structural_aligner.py`
+
+| Kind | Qualified name | Line | Signature / description |
+| --- | --- | ---: | --- |
+| class | `AlignmentTool` | 31 | — |
+| class | `AlignmentResult` | 43 | Standardized alignment result across all tools |
+| class | `StructuralAligner` | 59 | Unified interface for structural alignment tools in PRISM pipeline. Usage: aligner = StructuralAligner() # Simple pairwise (replaces TMalign) result = aligner.align_pair("query.pdb |
+| function | `StructuralAligner.__init__` | 77 | `self, gtalign_path: str='gtalign', usalign_path: str='USalign', foldseek_path: str='foldseek', ssalign_prefilter_path: str='ssalign_prefilter', saligner_path: str='saligner', localign_path: str='localign'` |
+| function | `StructuralAligner._verify_tools` | 94 | `self` — Check which tools are available |
+| function | `StructuralAligner.align_pair` | 108 | `self, query: str, target: str, tool: AlignmentTool=AlignmentTool.GTALIGN_GPU, **kwargs` — Perform pairwise structural alignment (direct TMalign replacement). Args: query: Path to query PDB/mmCIF target: Path to target PDB/mmCIF tool: Alignment tool to use **kwargs: Tool |
+| function | `StructuralAligner._run_gtalign` | 140 | `self, query: str, target: str, gpu: bool=True, **kwargs` — Run GTalign (exact TMalign replacement) |
+| function | `StructuralAligner._run_usalign` | 188 | `self, query: str, target: str, **kwargs` — Run US-align (universal alignment) |
+| function | `StructuralAligner._run_foldseek_pair` | 218 | `self, query: str, target: str, **kwargs` — Run Foldseek in pairwise global alignment mode |
+| function | `StructuralAligner.prefilter_database` | 256 | `self, query: str, database_dir: str, top_k: int=100, gpu_count: int=1` — Stage 1: Fast prefilter using SSAlign for large databases. Returns list of hit dictionaries with estimated scores. |
+| function | `StructuralAligner.refine_hits` | 289 | `self, query: str, hits: List[Dict], tool: AlignmentTool=AlignmentTool.GTALIGN_GPU` — Stage 2: Precise refinement of prefilter hits using GTalign/US-align. |
+| function | `StructuralAligner.align_motif` | 305 | `self, query: str, target: str, motif_residues: List[int], **kwargs` — Functional site / motif alignment using LocAlign. Args: query: Query structure PDB target: Target structure PDB motif_residues: List of residue indices defining the motif/binding s |
+| function | `StructuralAligner.benchmark_tools` | 367 | `self, test_pairs: List[Tuple[str, str]], tools: List[AlignmentTool]=None` — Benchmark multiple tools on test pairs for PRISM validation. |
+| function | `replace_tmalign_call` | 395 | `query_pdb: str, target_pdb: str, use_gpu: bool=True` — Drop-in replacement for TMalign call in PRISM pipeline. Returns dict with same keys as TMalign parser would produce. |
+| function | `two_stage_large_scale_search` | 417 | `query_pdb: str, database_path: str, top_k: int=100, refine_top: int=10` — Two-stage search for large databases (AFDB-scale). Stage 1: SSAlign prefilter (100-770x speedup) Stage 2: GTalign precise refinement |
+
 ### `src/surface_extract.py`
 
 | Kind | Qualified name | Line | Signature / description |
 | --- | --- | ---: | --- |
-| function | `extract_surfaces` | 15 | `queries` |
-| function | `extract_surface` | 28 | `protein` |
-| function | `_format_ca_pdb_line` | 96 | `serial, res_name, chain_id, res_seq, x, y, z` — Format a CA ATOM line for PDB output. |
+| function | `_resolve_scaffold_threshold` | 15 | `value=None` |
+| function | `extract_surfaces` | 21 | `queries, scaffold_threshold=None` |
+| function | `extract_surface` | 52 | `protein, scaffold_threshold=None` |
+| function | `_format_ca_pdb_line` | 125 | `serial, res_name, chain_id, res_seq, x, y, z` — Format a CA ATOM line for PDB output. |
 
 ### `src/template_filtering.py`
 
@@ -476,7 +571,7 @@ _No classes or functions defined in this module._
 | function | `evaluate_hotspots` | 108 | `match_dict, hotspots, criterion=2, minimum=1` — Count matching template hotspots using residue number and type. |
 | function | `count_matched_complementary_contacts` | 120 | `left_match, right_match, contacts` |
 | function | `_template_residue_key` | 136 | `value` — Return chain and residue number for a template-side match/contact. |
-| function | `evaluate_protocol_candidate` | 150 | `left_match, right_match, left_hotspots, right_hotspots, contacts, *, minimum_contacts=5` |
+| function | `evaluate_protocol_candidate` | 150 | `left_match, right_match, left_hotspots, right_hotspots, contacts, *, minimum_contacts=5, minimum_hotspots=1` |
 
 ### `src/template_generate.py`
 
@@ -489,18 +584,31 @@ _No classes or functions defined in this module._
 
 | Kind | Qualified name | Line | Signature / description |
 | --- | --- | ---: | --- |
-| function | `transformer` | 43 | `templates, alignment_dir='processed/alignment', audit_path=None` |
-| function | `load_alignment` | 65 | `query_id, template, chain_id, alignment_dir='processed/alignment'` |
-| function | `hotspot_analysis` | 82 | `match_dict, alignment=None, hotspots=None` |
-| function | `alignment_score_passes` | 90 | `alignment` — Apply the aligner-specific alignment score contract. TMalign and GTalign records expose a TM-score on the shared tm_score field. MultiProt's field is now a true TM-score (computed  |
-| function | `alignment_passes_thresholds` | 111 | `template_key, alignment, protocol_hotspots=None` |
-| function | `_protocol_hotspots` | 138 | `filter_assets, chain_id` — Return hotspots for one template chain, preserving legacy fallback. |
-| function | `_protocol_contacts` | 151 | `filter_assets, left_chain, right_chain` — Orient template contact pairs to match the two alignment sides. |
-| function | `process_pair_for_template` | 175 | `template, chain1, chain2, left_query, right_query, alignment_dir='processed/alignment', audit_path=None` |
-| function | `write_audit_record` | 253 | `template, left_query, right_query, chain_left, chain_right, orientation, left_alignment, right_alignment, status, audit_path=None` |
-| function | `create_transformed_pair` | 285 | `template, left_query, right_query, left_alignment, right_alignment, passed_pairs, orientation_suffix` |
-| function | `apply_tm_transform` | 311 | `input_pdb, output_pdb, translation, rotation_mat` |
-| function | `pair_has_acceptable_clashes` | 356 | `left_path, right_path` |
+| function | `resolve_thresholds` | 47 | `overrides=None` — Resolve explicit thresholds while retaining legacy module overrides. |
+| function | `select_orientations` | 71 | `orientation='native'` — Return the template-chain assignments to evaluate. ``native`` preserves MultiProt's behavior by trying both implicit assignments. ``o1`` and ``o2`` are fixed-orientation comparison |
+| function | `transformer` | 87 | `templates, alignment_dir='processed/alignment', audit_path=None, orientation='native', inputs_csv=None, thresholds=None` |
+| function | `load_alignment` | 122 | `query_id, template, chain_id, alignment_dir='processed/alignment'` |
+| function | `hotspot_analysis` | 139 | `match_dict, alignment=None, hotspots=None, thresholds=None` |
+| function | `alignment_score_passes` | 150 | `alignment, thresholds=None, template_residue_count=None` — Apply the aligner-specific alignment score contract. TMalign and GTalign records use the shared ``tm_score`` field. MultiProt records use native match count and interface coverage; |
+| function | `alignment_passes_thresholds` | 191 | `template_key, alignment, protocol_hotspots=None, thresholds=None` |
+| function | `_protocol_hotspots` | 249 | `filter_assets, chain_id` — Return hotspots for one template chain, preserving legacy fallback. |
+| function | `_protocol_contacts` | 262 | `filter_assets, left_chain, right_chain` — Orient template contact pairs to match the two alignment sides. |
+| function | `_alignment_variants` | 287 | `alignment` — Return primary plus legacy MultiProt solution variants. Current and GTalign records have one transform. The opt-in MultiProt compatibility record carries the legacy solver's retain |
+| function | `process_pair_for_template` | 315 | `template, chain1, chain2, left_query, right_query, alignment_dir='processed/alignment', audit_path=None, orientation='native', thresholds=None` |
+| function | `write_audit_record` | 469 | `template, left_query, right_query, chain_left, chain_right, orientation, left_alignment, right_alignment, status, audit_path=None, thresholds=None` |
+| function | `create_transformed_pair` | 505 | `template, left_query, right_query, left_alignment, right_alignment, passed_pairs, orientation_suffix, thresholds=None` |
+| function | `apply_tm_transform` | 542 | `input_pdb, output_pdb, translation, rotation_mat` |
+| function | `pair_has_acceptable_clashes` | 587 | `left_path, right_path, thresholds=None` |
+
+### `src/transformation_config.py`
+
+| Kind | Qualified name | Line | Signature / description |
+| --- | --- | ---: | --- |
+| function | `_value` | 7 | `environ, name, default, converter` |
+| class | `TransformationThresholds` | 13 | All adjustable gates applied by the transformation stage. Defaults mirror the current module constants. The MultiProt gates are separate because MultiProt records use native match/ |
+| function | `TransformationThresholds.from_environment` | 35 | `cls, environ=None` — Build thresholds from PRISM environment variables. |
+| function | `TransformationThresholds.with_overrides` | 81 | `self, overrides=None` — Return a copy with named fields replaced. |
+| function | `TransformationThresholds.as_dict` | 94 | `self` |
 
 ### `src/utils.py`
 
@@ -512,4 +620,11 @@ _No classes or functions defined in this module._
 | function | `vdw_radii` | 48 | — |
 | function | `vdw_radii_extended` | 51 | `res_name` |
 | function | `standard_data` | 124 | `resname` |
+
+### `src/validation_gate.py`
+
+| Kind | Qualified name | Line | Signature / description |
+| --- | --- | ---: | --- |
+| function | `validate_gate` | 20 | `args: argparse.Namespace` — Run validation gate on completed run. |
+| function | `main` | 63 | `argv: list[str] \| None=None` |
 

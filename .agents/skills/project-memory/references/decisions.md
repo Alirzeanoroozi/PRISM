@@ -547,7 +547,6 @@ Decision:
 - Use `mentoring-juniors` for Socratic guidance and `teach` for persistent
   lessons, reference documents, and learning records when learning ongoing
   PRISM concepts.
-- Do not use the deleted learnship learning skill for this teaching workflow.
 
 Reason:
 - The user explicitly selected these two teaching tools as the replacement
@@ -596,6 +595,33 @@ Consequences:
 - Consider refactoring `split_target_id()` usage to reduce coupling.
 - Investigate TMalign.cpp, compare.py, hotspot.py for cohesion improvements.
 - Graphify output preserved under `graphify-out/` for future reference.
+
+### Curated architecture graph scope - 2026-09-17
+
+Decision:
+- Use the maintained `src/` tree as the bounded architecture-navigation scope
+  for the current Graphify artifact. Keep generated benchmark/history trees,
+  copied environments, caches, and Graphify-generated corpus files outside the
+  architecture graph.
+- Treat the resulting `graphify-out/graph.json` as navigation evidence only;
+  exact execution and scientific decisions remain governed by source,
+  manifests, status records, and validated run artifacts.
+
+Reason:
+- The full checkout is dominated by historical/generated evidence and did not
+  finish a useful corpus audit within the bounded inspection window. A broad
+  graph would obscure current module relationships and repeat the stale-graph
+  problem already documented in project memory.
+
+Evidence:
+- The 2026-09-17 source graph contains 584 nodes, 1,113 edges, and 26
+  communities across 47 code files. Graphify diagnostics report zero missing,
+  dangling, self-loop, or collapsed edges.
+
+Consequence:
+- Refresh the source graph incrementally when architecture changes. Build a
+  separate deliberately filtered evidence/chronology graph when dated run
+  provenance is needed; do not silently merge it into the source graph.
 
 ### Feature branch workflow
 
@@ -653,3 +679,710 @@ Consequences:
 - Implemented on `feature/prism-cli-parity` with reversible checkpoint commits
   followed by `20ebf4c3cc3`; the focused compatibility/backend suite passed
   31 tests. Unrelated dirty worktree files were intentionally not staged.
+
+### Benchmark readiness boundary
+**Date:** 2026-08-13
+**Type:** workflow
+**Status:** accepted
+
+Decision:
+- Use current TMalign + NACCESS + external Rosetta as the stable baseline for
+  the next benchmark plan.
+- Freeze source state, template/interface assets, binaries, environments,
+  configuration, input manifest, and evaluator before launching full runs.
+- Treat GTalign CPU/GPU, current MultiProt end-to-end, and current-versus-
+  legacy FiberDock comparisons as distinct validation arms rather than silently
+  combining them into one benchmark result.
+
+Reason:
+- The repository currently contains extensive generated/untracked benchmark
+  state, and several tools are available without having a fully causal,
+  end-to-end comparison contract.
+
+Consequences:
+- Do not claim all pipeline variants are benchmark-validated from binary
+  presence or partial retained outputs.
+- Benchmark manifests must record source/tree identity, assets, executable
+  hashes, environment paths, thresholds, Slurm job IDs, and evaluator version.
+
+### Graphify main-files corpus
+**Date:** 2026-08-21
+**Type:** tooling/provenance
+**Status:** accepted
+
+Decision:
+- Keep the navigation graph in `graphify-main-files/` as a curated, code-only
+  merge of the live current TMalign/Rosetta pipeline and the retained legacy
+  MultiProt/FiberDock pipeline.
+- Include current `prism.py`, all `src/*.py`, stable-pipeline documentation,
+  and the legacy CLI plus `run_files/*.py` and launch/configuration files.
+- Exclude generated results, copied environments, caches, benchmark artifacts,
+  and external binary payloads.
+
+Reason:
+- A full repository scan is contaminated by nested historical runs, vendored
+  environments, and generated outputs; it produced an unusable oversized graph.
+- The graph is for architecture navigation, not source-of-truth provenance or
+  scientific validation.
+
+Consequences:
+- The merged graph currently contains 556 nodes and 1,100 edges.
+- Refresh it by rebuilding the two code-only arm graphs and merging them; do not
+  run incremental update against the older pre-#1504 archived graph.
+
+### Feature-bundle demo notebook scope
+**Date:** 2026-08-21
+**Type:** workflow
+**Status:** accepted
+
+Decision:
+- Treat `tmp/prism-prescript-pipeline-extension-clean/notebooks/prism_pipeline_demo.ipynb`
+  as a read-only diagnostic/demo artifact for the isolated feature bundle.
+- Use current source files, stable-pipeline documentation, and terminal stage
+  evidence as the authority for implementation or validation claims.
+
+Reason:
+- The notebook inspects retained runs, backend outputs, and source differences;
+  its expensive execution cells are explicitly opt-in and the bundle contains
+  intentionally Git-ignored external payloads.
+
+Consequence:
+- The notebook is useful for demonstration and orientation, but successful
+  notebook inspection alone is not pipeline acceptance evidence.
+
+### Transformation gate diagnostics preserve independent outcomes
+**Date:** 2026-08-23
+**Type:** scientific workflow
+**Status:** accepted
+
+Decision:
+- Diagnose transformation attrition with an independent gate ledger before
+  interpreting a cumulative filter order.
+- Use the cumulative diagnostic order: record availability, transform fields,
+  minimum matches, interface coverage, aligner-specific score contract,
+  hotspot mapping, complementary contacts, transformation materialization,
+  then C-alpha clashes.
+- Keep a separate replay of the actual production order and leave all stable
+  thresholds and filter-mode defaults unchanged.
+
+Reason:
+- Cumulative attrition is order-dependent. If the TM-score gate removes the
+  cohort early, later protocol and geometry conditions cannot be observed even
+  when they are independently measurable.
+
+Consequences:
+- Use `notebooks/transformation_gate_ablation.ipynb` for interactive,
+  one-variable-at-a-time diagnosis.
+- Treat missing assets as `not_evaluable`, and protocol gates as not applied in
+  geometry-only mode; neither state is biological success.
+- Do not infer threshold calibration from the single retained demonstration
+  case, and do not compare TMalign scores directly with MultiProt's native
+  match/coverage contract.
+
+### ProInterVal integration boundary - 2026-08-25
+
+Decision:
+- Treat ProInterVal as an analysis-only, opt-in auxiliary interface score.
+  Do not enable it as a default template curation filter, pre-refinement gate,
+  or replacement for physics-based ranking without a matched validation.
+
+Reason:
+- ProInterVal validates learned interface plausibility, whereas PRISM generates
+  and refines template-derived complexes. Its reported training labels and
+  decoy distributions do not establish performance on PRISM-generated rigid or
+  flexibly refined candidates. Recent scoring literature also shows that hit
+  rates can be unstable under model sampling and that score-to-DockQ
+  correlations degrade as conformational change increases.
+
+Consequences:
+- Any future adapter must preserve candidate identity, model/native hashes,
+  chain roles, preprocessing parameters, model version, score semantics, and
+  explicit unavailable/failed states.
+- Validation must use frozen PRISM inputs and candidates with native DockQ/iRMSD
+  labels, family/structure-disjoint splits, calibration, per-target metrics,
+  and false-negative auditing. No default threshold is authorized by this
+  literature review.
+
+### VALAR bounded worker run blocked before project work - 2026-09-07
+
+Decision:
+
+- Preserve the PRISM-prescript working tree and canonical outputs unchanged.
+- Do not claim USalign integration or transformation attrition findings from
+  run `20260907-prism-prescript-usalign-transform`.
+- Treat the local Copilot adapter issue as an execution blocker: Copilot 1.0.80
+  registered the run-scoped offline session but did not dispatch the required
+  `-i` prompt while its auth state was `Logged out`. Switching to `-p`, adding
+  credentials, or enabling remote authentication was not authorized.
+
+Evidence:
+
+- Durable blocker diagnosis:
+  `tmp/agent/20260907-prism-prescript-usalign-transform/orchestrator/run-050ecc271b334e3eb935363a0f45d7c8/evidence/copilot-interactive-blocker.md`
+- Two same-session retry jobs loaded the validated A40 Q6 profile and passed
+  local Qwen health/model checks, but recorded zero Copilot turns and zero
+  project edits before cancellation.
+
+Consequence:
+
+- The maintained NACCESS/TMalign/default path and all pre-existing dirty state
+  remain authoritative. A future bounded run requires an explicitly approved
+  offline-compatible Copilot invocation or supported local authentication
+  mechanism before scientific work is scheduled.
+
+### VALAR prompt-mode smoke blocked before project work - 2026-09-07
+
+Decision:
+
+- Preserve the fresh bounded run
+  `tmp/agent/20260907-prism-prescript-usalign-attrition-prompt/` and do not
+  launch USalign or transformation workers from it.
+- Treat Qwen health/model discovery as preflight evidence only. Do not claim
+  local-provider usage or `/goal` activation when Copilot has produced no
+  model turn.
+- Do not retry automatically, resume the failed interactive `-i` launch, or
+  fall back to remote/authenticated/alternate models.
+
+Evidence:
+
+- Slurm job `1653435` on `ai26` loaded validated A40 Q6, passed health, and
+  returned the actual `/v1/models` ID on port `18192`.
+- Copilot runtime `1.0.80` exited status 1 after only
+  `session.mcp_servers_loaded` and `session.skills_loaded`; its session
+  database contains zero `turns` rows and the Qwen log contains no inference
+  request.
+- Run-scoped provider binding and exact hook-disabled settings are recorded,
+  but they are configuration evidence rather than successful inference.
+
+Consequence:
+
+- USalign availability, integration, and the retained 1gte transformation
+  attrition figures remain unrun and unverified against current files.
+- The next action is a separately authorized smoke-only investigation of the
+  Copilot 1.0.80 batch/provider dispatch, with this run retained as evidence.
+
+### VALAR repaired-adapter provider smoke blocked before project work - 2026-09-08
+
+Decision:
+
+- Preserve the fresh run `tmp/agent/20260908-prism-prescript-usalign-attrition-prompt/` and do not launch USalign or transformation workers from it.
+- Treat Qwen health, `/v1/models`, and a server-side inference request as preflight evidence only. The repaired batch-safe Copilot launch is not validated because the exact direct-provider sentinel was not proven.
+- Do not retry automatically, alter provider-smoke validation, or fall back to remote/authenticated/alternate models in this run.
+
+Evidence:
+
+- Slurm job `1653627` on node `ai25` loaded validated `a40-q6-262k-1gpu` Q6 on port `18682`.
+- `logs/qwen-server.log` records one direct local inference request after model load.
+- `logs/provider-smoke.json` records `FAILED` with `error_type: ValueError`; response content was intentionally not persisted. Copilot was not started, so no compute-node Copilot runtime or model-turn evidence exists.
+- Parent and worker states are `BLOCKED`/`FAILED`; no project worker was launched and prior blocked runs remain preserved.
+
+Consequence:
+
+- USalign availability/integration and current transformation-file attrition remain unrun and unverified in this cycle.
+- The next action is a separately authorized minimal provider-smoke diagnosis that preserves response-body non-persistence, followed by a fresh single-worker smoke gate.
+
+### Explicit orientation-comparison run controls - 2026-09-09
+
+Decision:
+
+- Keep `native` as the default/no-option arm and define it as evaluation of
+  both implicit template-chain assignments. Retain `o1` and `o2` as explicit
+  fixed-orientation comparison arms.
+- Add explicit per-run input/template selection and typed threshold overrides
+  without changing the established defaults or the separate MultiProt native
+  match/coverage score contract.
+- Keep notebook execution opt-in and isolate each arm in a fresh run root.
+
+Rationale:
+
+- Comparing orientation requires the same input CSV, template panel, aligner,
+  and thresholds while changing only the branch selection. The no-option arm
+  must therefore preserve both branches rather than silently select one.
+- Environment variables remain supported for compatibility, but CLI values
+  must be observable in the run configuration and reach the actual gates.
+
+Consequence:
+
+- Candidate-yield changes from relaxed thresholds are diagnostic observations,
+  not validated scientific improvements. A benchmark ledger must still retain
+  raw alignment, qualified, contact, transformation, clash, and downstream
+  outcomes by orientation.
+- MultiProt coverage is measured against the corresponding template-chain
+  interface size when that asset is loaded; falling back to mapped-residue
+  count is reserved for direct records without a registered template size.
+
+### Stepwise reliability evidence boundary - 2026-09-10
+
+Decision:
+
+- Keep the orientation comparison notebook as the controlled entry point for
+  stepwise diagnosis. It must freeze the stable thresholds (including the
+  5.0 Å surface scaffold), write per-arm provenance manifests, and retain
+  explicit missing/unknown statuses.
+- Treat gate ablation, clash grids, refinement checks, ranking comparisons,
+  and US-align checks as diagnostic or separate validation arms. None changes
+  production defaults or converts survivor counts into quality claims.
+
+Rationale:
+
+- Candidate-yield differences cannot be interpreted while input/interface
+  assets, alignment score contracts, or per-candidate downstream evidence are
+  unresolved.
+- TMalign and MultiProt now retain raw-output hashes and return codes in their
+  alignment records, allowing the notebook to distinguish complete provenance
+  from a merely parseable JSON file.
+
+Consequence:
+
+- A completed notebook run is still required before making claims about
+  orientation-induced candidate reduction, clash-threshold validity, or
+  native-like recovery. US-align remains unavailable as a current `prism.py`
+  aligner until its executable, output contract, and matched downstream arm
+  are validated.
+
+### Audit-contract hardening after independent review - 2026-09-10
+
+Decision:
+
+- Include interface-list JSONs in consumed-asset provenance and classify asset
+  origin by both resolved path and content hash. If any required consumed asset
+  is missing or cannot be matched to current/legacy reference bytes, preserve
+  an unresolved status.
+- Treat alignment return/status/hash contract failures as unknown evidence for
+  every alignment-dependent gate. Numerical fields in a parseable but failed
+  alignment record are not sufficient for a cumulative pass.
+- Suppress native-like ranking recovery unless candidate panels are exactly
+  matched and the label mapping has independent source, source hash, and a
+  deterministic mapping hash.
+
+Rationale:
+
+- Transformation uses interface-list JSONs to define the coverage denominator;
+  omitting them could hide a mixed or stale template panel. Alignment output
+  can contain plausible numbers after a failed subprocess or truncated raw
+  output. Ranking recovery without exact panels or linked label provenance
+  confounds selection with quality.
+
+Consequence:
+
+- Existing/legacy runs lacking the new raw hashes or return codes remain useful
+  for inventory, but their alignment-dependent gate outcomes are explicitly
+  unknown. A biological conclusion requires rerunning or repairing the
+  provenance contract before threshold decisions.
+
+### Cross-repository boundary and validation hardening - 2026-09-12
+
+Decision:
+
+- Keep `PRISM-prescript` as the maintained pipeline and scientific-evidence
+  authority; accept features from `PRISM` only through reviewed adapters and
+  prescript contracts.
+- Preserve explicit `warn` results for artifacts recorded as missing or
+  unavailable, but require validation CLI consumers to return nonzero for
+  `warn` and `fail` so incomplete evidence cannot proceed silently.
+- Treat duplicate-ledger structure errors as controlled `fail` validation
+  results with machine-readable output rather than an unstructured traceback.
+
+Reason:
+
+- The two repositories have different runtime contracts and the experimental
+  branch lacks equivalent durable benchmark/provenance validation.
+- Existing Phase 1 schemas distinguish `pass`, `warn`, and `fail`; changing
+  the library status semantics would conflict with the accepted contract, while
+  nonzero CLI behavior preserves fail-closed consumption.
+
+Consequences:
+
+- `docs/adr/0003-prism-repository-boundary.md` is the durable cross-repository
+  ownership record.
+- `src/validation_gate.py` now catches duplicate-ledger errors and supports
+  `--output` as an alias for `--out`.
+- The validation CLI now accepts a declared expected inventory for detecting
+  rows absent from the ledger; pipeline producers still need to emit and pass
+  that inventory consistently on every benchmark run.
+
+### Smoke lifecycle and provenance boundary - 2026-09-12
+
+Decision:
+
+- Treat skipped as a terminal stage state when refinement is disabled or no
+  candidates pass transformation; completion classification must require a
+  terminal event, not merely a directory.
+- Keep declared inventories separate from observed ledgers. The validation
+  CLI supports TSV/JSON expected inventories and returns nonzero for warning
+  or failure so missing rows cannot reach scoring silently.
+- Represent dirty source state with bounded status entries and hashes rather
+  than expanding every file in copied environments. Runtime observations
+  remain outside the immutable contract hash.
+- Keep CPU and GPU GTalign runs as separate arms until their raw-output,
+  parameter, and parser differences are explained.
+
+Evidence:
+
+- Jobs 1658925, 1658928, and 1658929 have isolated stage logs and completion
+  JSON under tmp/agent/.
+- Job 1658926 has PyRosetta/FiberDock status records and an explicit DockQ
+  ABI failure under tmp/agent/20260912-optional-backend-smoke/.
+
+Consequence:
+
+- Zero-pair smokes establish plumbing and backend observability only. They do
+  not resolve orientation, threshold, ranking, or biological-quality claims.
+
+### Evaluator output-contract hardening - 2026-09-12
+
+Decision:
+
+- Make explicit model/native chain selectors authoritative in the benchmark
+  scorer; infer chain order only when selectors are absent.
+- Validate the raw model chain contract before launching iRMSD or DockQ.
+- Anchor helper-script resolution to the repository root rather than the
+  caller's current directory.
+- Give every DockQ invocation an isolated JSON output path and retain the
+  interface count; when more than one interface is present, keep detailed
+  interface metrics null at the model level.
+
+Reason:
+
+- A malformed legacy PDB could previously raise during chain inference or
+  reach an external scorer, while a caller-provided mapping was ignored. A
+  fixed/stale JSON path could also cause output reuse or overwrite.
+
+Evidence:
+
+- `tests/test_model_output_integrity.py`: 6 passed after the repair.
+- Full prescript suite: 344 passed, 6 skipped.
+
+Consequence:
+
+- This is evaluator integrity hardening only. It does not make any current
+  benchmark row scoreable and does not resolve the DockQ environment ABI
+  blocker.
+
+### DockQ runtime selection and replay boundary - 2026-09-12
+
+Decision:
+
+- Use `benchmark/prism_processed/env/prism_score_env/bin/python` as the
+  repository-local DockQ scoring interpreter for isolated replays until a
+  fresh environment matching `environment.yaml` is built and independently
+  verified.
+- Invoke DockQ as `bin/python -m DockQ` or through
+  `benchmark/scripts/score_single_prism_pair.py`; do not call the stale
+  repository-local `bin/DockQ` shebang directly.
+- Keep `gtalign_env` unchanged. Its failed DockQ ABI attempt remains preserved
+  as a blocked run, while the compatible repository-local replay is a separate
+  evaluator arm.
+
+Reason:
+
+- The repository-local interpreter successfully imports DockQ `2.1.3` with
+  NumPy `1.26.4`, whereas `gtalign_env` previously failed through a compiled
+  extension against NumPy `2.4.6`. The two environments must not be conflated.
+
+Evidence:
+
+- Slurm job `1658942`, run root `tmp/agent/20260912-dockq-repo-env/`.
+- Slurm job `1658943` passed through `src.eval.dockq` using the real
+  `gtalign_env` pipeline interpreter plus the repository-local override.
+- Slurm job `1658944` passed through the CLI adapter with
+  `--dockq-json-dir`, retaining exactly one raw DockQ JSON artifact in the
+  isolated run root.
+- `tests/test_dockq_runtime.py`, `tests/test_compare.py`, and
+  `tests/test_model_output_integrity.py`: focused runtime/compare/evaluator
+  checks passed after the override and CLI addition.
+- Raw and adapter return codes were both zero and both reported
+  `GlobalDockQ/DockQ=0.2116967149685021` for mapping `OA:GF`.
+
+Consequence:
+
+- DockQ evaluator wiring is available for isolated scoring, but no cohort
+  result, ranking conclusion, or biological quality claim is authorized until
+  the benchmark denominator, native mappings, and per-row provenance gates are
+  frozen.
+
+### USalign parser and manual pilot - 2026-09-21
+
+Decision:
+
+- Recognize both TMalign `Chain_1/Chain_2` and USalign
+  `Structure_1/Structure_2` score labels in the shared parser.
+- Carry explicit `aligner_name` provenance into parsed records and set it to
+  `USalign` only for the USalign runner branch; retain `TMalign` as the
+  compatibility default.
+- Keep full-panel USalign execution stopped until a paired pilot resolves
+  speed flags, input shape, and score normalization.
+
+Evidence:
+
+- The old production records had nonzero mappings but zero TM-scores because
+  the parser ignored Structure labels.
+- Three single-chain manual pairs ran successfully through TMalign, USalign
+  default/fast, and MultiProt, with no large USalign speed advantage.
+
+Consequence:
+
+- Parser validity is improved and tested, but the `tm_score=max(score_1,
+  score_2)` compatibility contract must be explicitly accepted or replaced
+  before scientific USalign comparison.
+
+### PRISM matched-aligner recovery - 2026-09-28
+
+Decision:
+
+- Keep the historical 19,855-template TMalign/MultiProt ledgers as a labelled
+  reusable lane and retain exact 19,948/19,062/19,058 panel evidence as a
+  separate alignment-only lane. Never pool the panels silently.
+- Reuse completed GTalign/TMalign/USalign exact alignment artifacts and do not
+  repeat GTalign GPU search. Continue only from the first missing common
+  downstream stage after panel and contract checks.
+- Require a fresh corrected-parser USalign pilot for worker/configuration
+  selection because the retained compact USalign JSON lacks explicit dual
+  normalized scores and the old 946-labelled command provenance is ambiguous.
+- Treat the one-query exact 946 pilot as a performance/alignment execution
+  gate only; it cannot establish candidate quality or full-pipeline speed.
+
+Evidence:
+
+- `benchmark/prism_processed_results/prism_aligner_comparison_20260928/stage_ledger.md`
+- `benchmark/prism_processed_results/prism_aligner_comparison_20260928/exact_panel_evidence/package_manifest.json`
+- `benchmark/scripts/run_usalign_worker_sweep.py` and
+  `benchmark/jobs/usalign_worker_sweep.sbatch`
+- Slurm dry-run job 1708927 and bounded job 1708928; wrapper-only failed
+  attempts 1708912 and 1708915 are preserved with explicit errors.
+
+Consequence:
+
+- USalign production may use default USalign with 16 measured workers, but
+  `-fast` is not scientifically interchangeable on this pilot because its
+  mappings, transforms, and scores differed materially. Production remains
+  gated on resumable compact output and common downstream validation.
+
+### USalign compact transformation/DockQ continuation - 2026-09-28
+
+Decision:
+
+- Run common transformation replay and compact candidate ledgers before
+  removing raw USalign alignment JSON. Do not create an aligner-specific
+  transformation pipeline.
+- Score generated transformed pairs with the existing bijective evaluator,
+  keeping complete GlobalDockQ distinct from requested cross-interface
+  scores and preserving explicit score/failure statuses.
+- Submit the corrected scoring array only as a dependency of compaction; each
+  worker checkpoints rows and only then removes combined/scoring scratch and
+  transformed halves.
+
+Evidence:
+
+- Focused tests: `33 passed` after adding the transformed scorer contract.
+- `sbatch --test-only` accepted the corrected scoring array as job 1709044;
+  production array 1709046 is queued after compaction job 1709007.
+- Live production provider is job 1708992 with default USalign/16 workers;
+  completion and scientific validation remain pending artifact evidence.
+
+Consequence:
+
+- No USalign quality or speed conclusion is promoted until provider
+  completion markers, compact counts, transformed scoring outputs, and cleanup
+  manifests validate. The exact-panel lane remains separate from the
+  historical 19,855-template lane.
+
+### Corrected refinement aggregation and retention gate - 2026-09-28
+
+### USalign batch aggregation and refinement handoff - 2026-09-28
+
+Decision:
+
+- Add a read-only, dependency-gated batch aggregator for the 26 USalign
+  production outputs. It must validate every per-batch compact status and
+  TSV before emitting an aggregate; scheduler completion alone is not enough.
+- Prepare the common-refinement manifest only from generated candidates with
+  explicit refinable score states and existing transformed/native inputs.
+  Keep all rejected rows and reasons in the compact ledger.
+- Preserve USalign transformed halves through common refinement and paired
+  DockQ validation; no cleanup is performed by the aggregation step.
+
+Evidence:
+
+- `benchmark/scripts/aggregate_usalign_batches.py`
+- `benchmark/jobs/aggregate_usalign_batches.sbatch`
+- `benchmark/scripts/prepare_usalign_refinement_manifest.py`
+- Focused tests pass for both additions; selected validation suite is
+  `46 passed`.
+- Slurm test-only job `1709191` was accepted and production job `1709192` was
+  submitted `afterany:1709046`.
+
+Consequence:
+
+- USalign remains `SUBMITTED` until provider, compaction, transformed DockQ,
+  batch aggregation, and downstream refinement artifacts are independently
+  validated. No run-scoped USalign deletion is currently permitted by the
+  stage ledger.
+
+### Final matched reducer contract - 2026-09-28
+
+Decision:
+
+- Join transformed and refined tables by the frozen candidate identity
+  (case, template, orientation, query pair, and chain pair), with a short
+  identity fallback only when chain labels are absent in both records.
+- Compute `Delta_DockQ` only when both sides contain numeric GlobalDockQ for
+  the same candidate. Use external Rosetta as the primary common-refinement
+  arm and retain FiberDock as an explicitly labelled fallback/experimental
+  arm.
+- Report a normal-approximation 95% interval for paired deltas, with the
+  method and small-sample rule recorded in the manifest; never use unpaired
+  marginal means as a refinement effect.
+
+Evidence:
+
+- `benchmark/scripts/aggregate_final_matched_comparison.py`
+- `tests/test_aggregate_final_matched_comparison.py`
+- Focused test passes; source hash is retained in the staged provenance
+  snapshot.
+
+Decision:
+
+- Treat checkpoint `dockq`/`dockq_sum` fields in the active common-refinement
+  run as diagnostics only when raw DockQ JSON is available; use raw
+  `GlobalDockQ` for complete-complex quality and explicitly aggregate only
+  requested receptor-ligand interfaces.
+- Preserve unresolved transformed structures after scoring failures or
+  non-scoreable states. Delete transformed halves only after a compact score
+  record reaches a validated score state, and record the retained unresolved
+  count in the cleanup manifest.
+- Join USalign compact candidates to the batch input manifest so case-level
+  comparison uses durable BM5.5 pair identities rather than filename parsing.
+
+Evidence:
+
+- `benchmark/scripts/aggregate_corrected_refinement.py` and
+  `tests/test_aggregate_corrected_refinement.py`.
+- `benchmark/scripts/score_transformed_usalign_batch.py` and
+  `tests/test_score_transformed_usalign_batch.py`.
+- `benchmark/scripts/replay_compact_usalign_batch.py` and
+  `tests/test_replay_compact_usalign_batch.py`.
+- Existing GTalign corrected transformed score summary: 15,440 rows, 14,300
+  scored, 1,140 score_failed across 216 cases; active refinement source
+  example demonstrates `GlobalDockQ` can differ materially from `best_dockq`.
+
+Consequence:
+
+- Historical GTalign transformed scoring is reusable but panel-labelled and
+  unrefined. Active KUACC refinement must finish before corrected T/M
+  aggregation or any deletion. USalign production remains execution-pending
+  validation.
+
+### USalign refinement handoff gate - 2026-09-28
+
+Decision:
+
+- Submit a single dependency-gated preparation job after compact USalign
+  aggregation. The job must verify `validated_compacted`, write selected and
+  rejected manifests, and stop before array submission so the selected count
+  and live resources can be reviewed.
+
+Evidence:
+
+- `benchmark/jobs/prepare_usalign_refinement.sbatch`
+- `tests/test_prepare_usalign_refinement_job.py`
+- Slurm test-only job `1709232` accepted; production job `1709233` submitted
+  after `1709192`.
+
+Consequence:
+
+- The common USalign refinement stage is resumable and dependency-gated, but
+  remains `NOT_SUBMITTED` until its validated manifest exists.
+
+### USalign cleanup and timing provenance gate - 2026-09-28
+
+Decision:
+
+- Keep cleanup as a separate fail-closed operation after all downstream
+  consumers validate. Require aggregate path/hash checks, refinement-handoff
+  status, common-refinement cleanup eligibility, and final-package validation.
+- Persist the dry-run cleanup manifest before applying deletion, reject
+  symlinked or boundary-escaping targets, and retain compact aggregates,
+  checkpoints, manifests, and provenance.
+- Aggregate timing/resource ledgers separately from scientific quality tables;
+  leave missing CPU/GPU fields empty rather than inferring resource use.
+
+Evidence:
+
+- `benchmark/scripts/cleanup_usalign_run.py`
+- `tests/test_cleanup_usalign_run.py`
+- `benchmark/scripts/aggregate_timing_resources.py`
+- Comparison-focused regression set: `73 passed`.
+
+Consequence:
+
+- No USalign cleanup has been applied because provider, transformed-DockQ,
+  common-refinement, and final matched consumers remain incomplete.
+
+### Preserve nested common-refinement failures - 2026-09-28
+
+Decision:
+
+- Treat a common-refinement candidate with a terminal worker failure as an
+  auditable result, not as a missing row or DockQ zero. Compact aggregation
+  must carry failed stage names and their nested error/reason text.
+- Do not synthesize a second predicted chain when the native mapping requests
+  multiple ligand chains but the retained assembled model contains one.
+
+Evidence:
+
+- GTalign checkpoint
+  `v2-chain-normalized-gtalign-medium_1wq1_045-3c6e1989873c8003.json`:
+  input normalization failed because native ligand `G*` requires two chain
+  segments while predicted model chain `D` provides one.
+- `benchmark/scripts/aggregate_corrected_refinement.py`
+- `tests/test_aggregate_corrected_refinement.py` (`5 passed` with cleanup and
+  adapter regression tests).
+
+Consequence:
+
+- The failure will remain in the final failure/rejection summary and will be
+  excluded from score denominators unless a scientifically justified mapping
+  is independently established.
+
+### Preserve active refinement ownership — 2026-09-28
+
+Decision:
+
+- Keep the existing VALAR GTalign array and KUACC TMalign/MultiProt refinement
+  waves as the sole owners of their selected candidates while they are active.
+- Do not submit overlapping replacement arrays or delete their inputs; advance
+  only after checkpoint/exit markers and compact downstream records validate.
+
+Evidence:
+
+- GTalign job `1709167` remains active with fresh completed checkpoints.
+- KUACC manifests and submission events identify the TMalign/MultiProt lane,
+  while shard tasks continue progressing under the controller dependency.
+
+### Use an opt-in common match/coverage contract for aligner comparison — 2026-09-28
+
+Decision:
+
+- Preserve provider-native acceptance as the default, but add
+  `alignment_gate_mode=common_match_coverage` for controlled TMalign/USalign/
+  GTalign/MultiProt comparisons.
+- In common mode, use the shared minimum matched-residue and interface-coverage
+  thresholds with an inclusive boundary for every aligner. Do not apply the
+  TM-score threshold; retain scores only as post-hoc diagnostics.
+
+Rationale:
+
+- MultiProt's `tm_score` is an RMSD-derived proxy and cannot be made equivalent
+  to a TMalign TM-score by assigning the same numeric cutoff. A common
+  count/coverage contract is explicit, reproducible, and avoids a hidden
+  algorithm-specific advantage.
+
+Evidence:
+
+- `src/transformation_config.py`
+- `src/transformation.py`
+- `src/stepwise_analysis.py`
+- `prism.py`
+- `docs/exec-plans/20260928-comparable-alignment-contract.md`
+- 50 focused regression tests passed.

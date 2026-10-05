@@ -6,22 +6,69 @@ from .naccess_utils import get_asa_complex_target
 from .utils import distance_calculator
 
 RSATHRESHOLD = 15.0
-SCFFTHRESHOLD = 1.4
+SCFFTHRESHOLD = 5.0
 
 SURFACE_EXTRACTION_DIR = "processed/surface_extraction"
 os.makedirs(SURFACE_EXTRACTION_DIR, exist_ok=True)
+SURFACE_FAILURE_LOG = os.path.join(SURFACE_EXTRACTION_DIR, "failures.tsv")
 
-def extract_surfaces(queries):
+def _resolve_scaffold_threshold(value=None):
+    if value is not None:
+        return float(value)
+    return float(os.environ.get("PRISM_SCFF_THRESHOLD", SCFFTHRESHOLD))
+
+
+def extract_surfaces(queries, scaffold_threshold=None):
+    scaffold_threshold = _resolve_scaffold_threshold(scaffold_threshold)
     for protein in queries:
-        extract_surface(protein)
+        # Skip chains that already have a valid (non-placeholder) surface PDB.
+        # Surface extraction is shared across every pipeline run on a workspace;
+        # without this guard, concurrent jobs race on NACCESS/FreeSASA fixed
+        # filenames in the same directory. A 4-byte "END\n" file is only ever the
+        # recorded placeholder for a failed/empty extraction, so it is re-tried.
+        # Use the canonical (lowercase-pdb + uppercase-chains) name so the guard
+        # matches the files both the precompute step and the aligner use, even
+        # when the inputs.csv spelling differs in case.
+        from .pdb_download import normalize_target_id
+        try:
+            canonical_protein = normalize_target_id(protein)
+        except Exception:
+            canonical_protein = protein
+        asa_path = os.path.join(SURFACE_EXTRACTION_DIR, f"{canonical_protein}.asa.pdb")
+        if os.path.exists(asa_path) and os.path.getsize(asa_path) > 4:
+            print(f"Surface already present for {canonical_protein}, skipping extraction.")
+            continue
+        try:
+            extract_surface(protein, scaffold_threshold=scaffold_threshold)
+        except Exception as exc:
+            # Preserve the pair in the batch while making the stage failure
+            # explicit for later comparison/reporting.
+            os.makedirs(SURFACE_EXTRACTION_DIR, exist_ok=True)
+            with open(f"{SURFACE_EXTRACTION_DIR}/{canonical_protein}.asa.pdb", "w") as handle:
+                handle.write("END\n")
+            with open(SURFACE_FAILURE_LOG, "a") as handle:
+                handle.write(f"{canonical_protein}\t{type(exc).__name__}: {exc}\n")
 
-def extract_surface(protein):
+def extract_surface(protein, scaffold_threshold=None):
+    scaffold_threshold = _resolve_scaffold_threshold(scaffold_threshold)
     print(f"Extracting surface for {protein}...")
     asa_complex = get_asa_complex_target(protein, SURFACE_EXTRACTION_DIR)
     rsa_residues = [key for key in asa_complex if asa_complex[key] > RSATHRESHOLD]
     if len(rsa_residues) == 0:
+        # Keep the downstream alignment contract even when a structure has no
+        # exposed residues above the RSA threshold.  An empty CA-only PDB is a
+        # data outcome that can be recorded, whereas a missing file aborts the
+        # entire multi-pair batch during parser startup.
+        os.makedirs(SURFACE_EXTRACTION_DIR, exist_ok=True)
+        with open(f"{SURFACE_EXTRACTION_DIR}/{protein}.asa.pdb", "w") as handle:
+            handle.write("END\n")
         return {}
-    pdb_path = f"processed/pdbs/{protein[:4].lower()}.pdb"
+    # Materialized single-chain PDBs use the canonical (lowercase-pdb +
+    # uppercase-chains) name, e.g. 2CV5A -> processed/pdbs/2cv5A.pdb.
+    from .pdb_download import normalize_target_id
+    canonical = normalize_target_id(protein)
+    chain_pdb_path = f"processed/pdbs/{canonical}.pdb"
+    pdb_path = chain_pdb_path if os.path.exists(chain_pdb_path) else f"processed/pdbs/{protein[:4].lower()}.pdb"
     parser = PDBParser(QUIET=True)
     structure = parser.get_structure(protein, pdb_path)
 
@@ -57,7 +104,7 @@ def extract_surface(protein):
     asa_ca_lines = []
     for chain_id, res_num_str, res_name, res_seq, coords in all_ca_data:
         for rsa_coords in rsa_ca_coords:
-            if distance_calculator(coords, rsa_coords) <= SCFFTHRESHOLD:
+            if distance_calculator(coords, rsa_coords) <= scaffold_threshold:
                 asa_ca_lines.append((res_name, chain_id, res_seq, coords))
                 break
 

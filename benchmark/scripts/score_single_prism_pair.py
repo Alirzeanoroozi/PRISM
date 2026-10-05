@@ -1,0 +1,481 @@
+#!/usr/bin/env python3
+"""
+Score one model PDB or a folder of model PDBs against a native/reference PDB
+with the same benchmark metrics used by the PRISM evaluation pipeline.
+
+Single-file mode:
+    python benchmark/scripts/score_single_prism_pair.py model.pdb native.pdb
+
+Folder mode:
+    python benchmark/scripts/score_single_prism_pair.py models_dir native.pdb --out-csv results.csv
+"""
+
+import argparse
+import csv
+import hashlib
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import uuid
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from benchmark.scripts.standardized_evaluator import (
+    no_align_is_safe,
+    validate_pdb_mapping,
+    validate_raw_pdb_chain_contract,
+)
+
+
+def run_cmd(cmd, timeout_sec, env=None):
+    try:
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout_sec,
+            env=env,
+        )
+    except subprocess.TimeoutExpired:
+        return {
+            "ok": False,
+            "stdout": "",
+            "stderr": f"timed out after {timeout_sec}s",
+            "returncode": None,
+        }
+
+    return {
+        "ok": proc.returncode == 0,
+        "stdout": proc.stdout.strip(),
+        "stderr": proc.stderr.strip(),
+        "returncode": proc.returncode,
+    }
+
+
+def maybe_float(value):
+    try:
+        return float(value)
+    except Exception:
+        return None
+
+
+def bounded_dockq(value):
+    """Parse a DockQ scalar and reject values outside the defined range."""
+    parsed = maybe_float(value)
+    if parsed is not None and not 0.0 <= parsed <= 1.0:
+        raise ValueError(f"DockQ is outside [0, 1]: {parsed}")
+    return parsed
+
+
+def dockq_json_path(json_dir, model_pdb, native_pdb, mapping):
+    """Build a collision-resistant persistent raw-JSON path."""
+    identity = "\0".join(
+        (str(Path(model_pdb).resolve()), str(Path(native_pdb).resolve()), str(mapping))
+    )
+    digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
+    return Path(json_dir) / f"{Path(model_pdb).stem}.{digest}.{uuid.uuid4().hex}.dockq.json"
+
+
+def infer_chain_order(pdb_path):
+    """Return (receptor_chains, ligand_chains) inferred from chain order.
+
+    For a 2-chain PDB returns single-character chain ids. For >2 chains the
+    structure is split on TER markers (or evenly when none are present), so
+    multi-chain receptor/ligand inputs are supported.
+    """
+    groups = [[]]
+    seen = set()
+    with open(pdb_path) as handle:
+        for line in handle:
+            if line.startswith("TER") and groups[-1]:
+                groups.append([])
+                continue
+            if not line.startswith(("ATOM", "HETATM")):
+                continue
+            chain_id = line[21].strip() or "_"
+            if chain_id in seen:
+                continue
+            seen.add(chain_id)
+            groups[-1].append(chain_id)
+
+    groups = [g for g in groups if g]
+    if len(groups) >= 2:
+        receptor = "".join(groups[0])
+        ligand = "".join(c for g in groups[1:] for c in g)
+        return receptor, ligand
+
+    chains = groups[0] if groups else []
+    if len(chains) == 2:
+        return chains[0], chains[1]
+    if len(chains) > 2:
+        half = len(chains) // 2
+        return "".join(chains[:half]), "".join(chains[half:])
+    raise ValueError(
+        f"Could not infer receptor/ligand chains for {pdb_path}; found chains {chains}"
+    )
+
+
+def resolve_model_inputs(path_arg):
+    input_path = Path(path_arg)
+    if input_path.is_file():
+        return [input_path]
+    if input_path.is_dir():
+        return sorted(p for p in input_path.iterdir() if p.is_file() and p.suffix.lower() == ".pdb")
+    raise FileNotFoundError(f"Input path not found: {input_path}")
+
+
+def parse_dockq_short(stdout):
+    values = {}
+    tokens = stdout.strip().split()
+    for i, token in enumerate(tokens[:-1]):
+        if token in {"DockQ", "iRMSD", "LRMSD", "fnat", "fnonnat", "F1", "clashes"}:
+            values[token] = maybe_float(tokens[i + 1])
+    return values
+
+
+def score_one(
+    model_pdb,
+    native_pdb,
+    score_python,
+    timeout_sec,
+    dockq_no_align,
+    model_receptor=None,
+    model_ligand=None,
+    native_receptor=None,
+    native_ligand=None,
+    dockq_json_dir=None,
+    n_cpu=1,
+):
+    model_chains = None
+    native_chains = None
+    if model_receptor is None or model_ligand is None:
+        model_chains = infer_chain_order(model_pdb)
+    if native_receptor is None or native_ligand is None:
+        native_chains = infer_chain_order(native_pdb)
+    model_receptor = model_receptor or model_chains[0]
+    model_ligand = model_ligand or model_chains[1]
+    native_receptor = native_receptor or native_chains[0]
+    native_ligand = native_ligand or native_chains[1]
+
+    irmsd_script = REPO_ROOT / "benchmark/scripts/irmsd.py"
+
+    result = {
+        "model_pdb": str(model_pdb.resolve()),
+        "native_pdb": str(native_pdb.resolve()),
+        "model_receptor": model_receptor,
+        "model_ligand": model_ligand,
+        "native_receptor": native_receptor,
+        "native_ligand": native_ligand,
+        "irmsd": None,
+        "dockq": None,
+        "dockq_global": None,
+        "dockq_sum": None,
+        "dockq_irmsd": None,
+        "dockq_lrmsd": None,
+        "dockq_fnat": None,
+        "dockq_fnonnat": None,
+        "dockq_f1": None,
+        "dockq_clashes": None,
+        "dockq_mapping": "",
+        "mapping_validation_status": "aligned_default",
+        "mapping_validation_errors": "",
+        "dockq_raw_json_path": "",
+        "dockq_raw_json_sha256": "",
+        "dockq_argv": "",
+        "dockq_no_align": bool(dockq_no_align),
+        "dockq_n_cpu": n_cpu,
+        "dockq_json_status": "not_attempted",
+        "error_irmsd": "",
+        "error_dockq": "",
+    }
+
+    output_contract = validate_raw_pdb_chain_contract(
+        model_pdb, model_receptor, model_ligand
+    )
+    if not output_contract.valid:
+        detail = "; ".join(output_contract.errors)
+        result["error_dockq"] = f"output contract rejected: {detail}"
+        result["error_irmsd"] = "output contract rejected before iRMSD"
+        return result
+
+    if dockq_no_align:
+        if len(model_receptor) != len(native_receptor) or len(model_ligand) != len(native_ligand):
+            result["error_dockq"] = (
+                "unsafe no-align mapping: model/native receptor or ligand chain counts differ"
+            )
+            result["mapping_validation_status"] = "rejected"
+            result["mapping_validation_errors"] = result["error_dockq"]
+            result["error_irmsd"] = "unsafe no-align mapping rejected before iRMSD"
+            return result
+        chain_mapping = dict(zip(model_receptor + model_ligand, native_receptor + native_ligand))
+        mapping_validation = validate_pdb_mapping(model_pdb, native_pdb, chain_mapping)
+        if not no_align_is_safe(mapping_validation):
+            result["error_dockq"] = (
+                "unsafe no-align mapping: " + "; ".join(mapping_validation.errors)
+            )
+            result["mapping_validation_status"] = "rejected"
+            result["mapping_validation_errors"] = "; ".join(mapping_validation.errors)
+            result["error_irmsd"] = "unsafe no-align mapping rejected before iRMSD"
+            return result
+        result["mapping_validation_status"] = "validated_no_align"
+
+    irmsd_cmd = [
+        str(score_python),
+        str(irmsd_script),
+        str(model_pdb),
+        model_receptor,
+        model_ligand,
+        str(native_pdb),
+        native_receptor,
+        native_ligand,
+    ]
+    irmsd_run = run_cmd(irmsd_cmd, timeout_sec)
+    if irmsd_run["ok"]:
+        result["irmsd"] = maybe_float(irmsd_run["stdout"])
+        if result["irmsd"] is None:
+            result["error_irmsd"] = "iRMSD output was not numeric"
+    else:
+        result["error_irmsd"] = irmsd_run["stderr"] or irmsd_run["stdout"] or "iRMSD failed"
+
+    mapping = f"{model_receptor}{model_ligand}:{native_receptor}{native_ligand}"
+    result["dockq_mapping"] = mapping
+    env = dict(os.environ)
+    env["PATH"] = f"{score_python.parent}:{env.get('PATH', '')}"
+    temporary_json = None
+    if dockq_json_dir is None:
+        temporary_json = tempfile.TemporaryDirectory(prefix="prism-dockq-")
+        json_dir = Path(temporary_json.name)
+    else:
+        json_dir = Path(dockq_json_dir)
+        json_dir.mkdir(parents=True, exist_ok=True)
+    json_path = dockq_json_path(json_dir, model_pdb, native_pdb, mapping)
+    dockq_cmd = [
+        str(score_python),
+        "-m",
+        "DockQ",
+        str(model_pdb),
+        str(native_pdb),
+        "--mapping",
+        mapping,
+        "--json",
+        str(json_path),
+        "--short",
+        "--n_cpu",
+        str(n_cpu),
+    ]
+    if dockq_no_align:
+        dockq_cmd.append("--no_align")
+    result["dockq_argv"] = json.dumps(dockq_cmd)
+    dockq_run = run_cmd(dockq_cmd, timeout_sec, env=env)
+    if dockq_run["ok"]:
+        try:
+            payload = json.loads(json_path.read_text(encoding="utf-8"))
+            interfaces = payload.get("best_result", payload.get("interfaces", []))
+            if isinstance(interfaces, dict):
+                interfaces = list(interfaces.values())
+            if not isinstance(interfaces, list):
+                raise ValueError("DockQ interface result is not a list")
+            result["dockq_interface_count"] = len(interfaces)
+            result["dockq_global"] = bounded_dockq(payload.get("GlobalDockQ"))
+            result["dockq_sum"] = maybe_float(payload.get("best_dockq"))
+            result["dockq"] = result["dockq_global"]
+            result["dockq_json_status"] = "valid"
+            if len(interfaces) == 1 and isinstance(interfaces[0], dict):
+                detail = interfaces[0]
+                result["dockq_irmsd"] = maybe_float(detail.get("iRMSD"))
+                result["dockq_lrmsd"] = maybe_float(detail.get("LRMSD"))
+                result["dockq_fnat"] = maybe_float(detail.get("fnat"))
+                result["dockq_fnonnat"] = maybe_float(detail.get("fnonnat"))
+                result["dockq_f1"] = maybe_float(detail.get("F1"))
+                result["dockq_clashes"] = maybe_float(detail.get("clashes"))
+            if result["dockq"] is None:
+                result["dockq_json_status"] = "valid_unscored"
+                result["error_dockq"] = (
+                    "DockQ JSON is valid but lacks a usable GlobalDockQ for the "
+                    "reported interface set"
+                )
+        except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            result["dockq_json_status"] = "invalid_or_missing"
+            result["error_dockq"] = (
+                "DockQ JSON missing or invalid; short-output fallback is disabled: "
+                f"{type(exc).__name__}: {exc}"
+            )
+    else:
+        result["error_dockq"] = dockq_run["stderr"] or dockq_run["stdout"] or "DockQ failed"
+
+    if dockq_run["ok"] and json_path.is_file():
+        result["dockq_raw_json_sha256"] = hashlib.sha256(json_path.read_bytes()).hexdigest()
+        if dockq_json_dir is not None:
+            result["dockq_raw_json_path"] = str(json_path)
+
+    if temporary_json is not None:
+        temporary_json.cleanup()
+
+    return result
+
+
+def write_csv(rows, out_csv):
+    fieldnames = [
+        "model_pdb",
+        "native_pdb",
+        "model_receptor",
+        "model_ligand",
+        "native_receptor",
+        "native_ligand",
+        "irmsd",
+        "dockq",
+        "dockq_global",
+        "dockq_sum",
+        "dockq_interface_count",
+        "dockq_irmsd",
+        "dockq_lrmsd",
+        "dockq_fnat",
+        "dockq_fnonnat",
+        "dockq_f1",
+        "dockq_clashes",
+        "dockq_mapping",
+        "mapping_validation_status",
+        "mapping_validation_errors",
+        "dockq_raw_json_path",
+        "dockq_raw_json_sha256",
+        "dockq_argv",
+        "dockq_no_align",
+        "dockq_n_cpu",
+        "dockq_json_status",
+        "error_irmsd",
+        "error_dockq",
+    ]
+    with open(out_csv, "w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Score one model PDB or a folder of model PDBs with iRMSD and DockQ")
+    parser.add_argument("model_input", help="Model PDB file or directory containing model PDB files")
+    parser.add_argument("native_pdb", help="Native/reference PDB")
+    parser.add_argument("--model-receptor", default=None, help="Model receptor chain(s), e.g. L")
+    parser.add_argument("--model-ligand", default=None, help="Model ligand chain(s), e.g. H")
+    parser.add_argument("--native-receptor", default=None, help="Native receptor chain(s), e.g. A")
+    parser.add_argument("--native-ligand", default=None, help="Native ligand chain(s), e.g. B")
+    parser.add_argument(
+        "--score-python",
+        default=sys.executable,
+        help="Python interpreter used to run benchmark scoring helpers",
+    )
+    parser.add_argument(
+        "--timeout-sec",
+        type=int,
+        default=120,
+        help="Timeout for each scoring subprocess",
+    )
+    parser.add_argument(
+        "--dockq-json-dir",
+        default=None,
+        help="Directory for raw DockQ JSON outputs; defaults to an isolated temporary directory",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print machine-readable JSON for single-file mode",
+    )
+    parser.add_argument(
+        "--out-csv",
+        default=None,
+        help="Write results to CSV. Required for folder mode; optional for single-file mode.",
+    )
+    parser.add_argument(
+        "--dockq-no-align",
+        action="store_true",
+        help="Pass --no_align to DockQ for faster scoring when residue numbering/mapping is already trusted",
+    )
+    parser.add_argument(
+        "--n-cpu",
+        type=int,
+        default=1,
+        help="Explicit CPU count passed to DockQ",
+    )
+    args = parser.parse_args()
+
+    repo_root = Path.cwd()
+    score_python = Path(args.score_python)
+    if not score_python.is_absolute():
+        score_python = repo_root / score_python
+
+    dockq_json_dir = Path(args.dockq_json_dir) if args.dockq_json_dir else None
+    if dockq_json_dir is not None and not dockq_json_dir.is_absolute():
+        dockq_json_dir = repo_root / dockq_json_dir
+
+    native_pdb = Path(args.native_pdb)
+    if not native_pdb.is_absolute():
+        native_pdb = repo_root / native_pdb
+
+    model_inputs = resolve_model_inputs(args.model_input)
+    if not model_inputs:
+        raise SystemExit("No .pdb files found in input")
+
+    rows = []
+    for model_pdb in model_inputs:
+        if not model_pdb.is_absolute():
+            model_pdb = repo_root / model_pdb
+        rows.append(
+            score_one(
+                model_pdb=model_pdb,
+                native_pdb=native_pdb,
+                score_python=score_python,
+                timeout_sec=args.timeout_sec,
+                dockq_no_align=args.dockq_no_align,
+                model_receptor=args.model_receptor,
+                model_ligand=args.model_ligand,
+                native_receptor=args.native_receptor,
+                native_ligand=args.native_ligand,
+                dockq_json_dir=dockq_json_dir,
+                n_cpu=args.n_cpu,
+            )
+        )
+
+    if args.out_csv:
+        out_csv = Path(args.out_csv)
+        if not out_csv.is_absolute():
+            out_csv = repo_root / out_csv
+        out_csv.parent.mkdir(parents=True, exist_ok=True)
+        write_csv(rows, out_csv)
+
+    if len(rows) == 1 and args.json:
+        print(json.dumps(rows[0], indent=2, sort_keys=True))
+        return 0
+
+    if len(rows) == 1 and not args.out_csv:
+        row = rows[0]
+        print(f"model: {row['model_pdb']}")
+        print(f"native: {row['native_pdb']}")
+        print(
+            "chains: "
+            f"model {row['model_receptor']}/{row['model_ligand']} -> "
+            f"native {row['native_receptor']}/{row['native_ligand']}"
+        )
+        print(f"iRMSD: {row['irmsd'] if row['irmsd'] is not None else 'NA'}")
+        print(f"DockQ: {row['dockq'] if row['dockq'] is not None else 'NA'}")
+        if row["error_irmsd"] or row["error_dockq"]:
+            print("errors:")
+            if row["error_irmsd"]:
+                print(f"  irmsd: {row['error_irmsd']}")
+            if row["error_dockq"]:
+                print(f"  dockq: {row['error_dockq']}")
+        return 0
+
+    if args.out_csv:
+        print(f"wrote {len(rows)} result rows to {out_csv}")
+    else:
+        print(json.dumps(rows, indent=2, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

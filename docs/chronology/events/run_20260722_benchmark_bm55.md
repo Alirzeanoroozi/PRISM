@@ -1,0 +1,51 @@
+# 2026-07-22: 20260722-benchmark-bm55
+
+- Event ID: `run_20260722_benchmark_bm55`
+- Kind: `run`
+- Source: `tmp/agent/20260722-benchmark-bm55`
+- Date evidence: `tmp/agent directory prefix`
+- Recorded status: `no_terminal_status`
+- Excluded vendor/cache files under this source: 0
+
+## Selected evidence paths
+
+- `tmp/agent/20260722-benchmark-bm55/cpu_freesasa_tm_external-1379422.err`
+- `tmp/agent/20260722-benchmark-bm55/cpu_freesasa_tm_external-1379422.out`
+- `tmp/agent/20260722-benchmark-bm55/cpu_freesasa_tm_external-1379548.err`
+- `tmp/agent/20260722-benchmark-bm55/cpu_freesasa_tm_external-1379548.out`
+- `tmp/agent/20260722-benchmark-bm55/cpu_freesasa_tm_fiberdock-1379421.err`
+- `tmp/agent/20260722-benchmark-bm55/cpu_freesasa_tm_fiberdock-1379421.out`
+- `tmp/agent/20260722-benchmark-bm55/cpu_freesasa_tm_fiberdock-1379547.err`
+- `tmp/agent/20260722-benchmark-bm55/cpu_freesasa_tm_fiberdock-1379547.out`
+- `tmp/agent/20260722-benchmark-bm55/cpu_multiprot_external_freesasa-1379420.err`
+- `tmp/agent/20260722-benchmark-bm55/cpu_multiprot_external_freesasa-1379420.out`
+- `tmp/agent/20260722-benchmark-bm55/cpu_multiprot_external_freesasa-1379546.err`
+- `tmp/agent/20260722-benchmark-bm55/cpu_multiprot_external_freesasa-1379546.out`
+- `tmp/agent/20260722-benchmark-bm55/cpu_multiprot_external_naccess-1379419.err`
+- `tmp/agent/20260722-benchmark-bm55/cpu_multiprot_external_naccess-1379419.out`
+- `tmp/agent/20260722-benchmark-bm55/cpu_multiprot_external_naccess-1379545.err`
+- `tmp/agent/20260722-benchmark-bm55/cpu_multiprot_external_naccess-1379545.out`
+- `tmp/agent/20260722-benchmark-bm55/cpu_multiprot_fiberdock_freesasa-1379418.err`
+- `tmp/agent/20260722-benchmark-bm55/cpu_multiprot_fiberdock_freesasa-1379418.out`
+- `tmp/agent/20260722-benchmark-bm55/cpu_multiprot_fiberdock_freesasa-1379482.err`
+- `tmp/agent/20260722-benchmark-bm55/cpu_multiprot_fiberdock_freesasa-1379482.out`
+- `tmp/agent/20260722-benchmark-bm55/cpu_multiprot_fiberdock_freesasa-1379538.err`
+- `tmp/agent/20260722-benchmark-bm55/cpu_multiprot_fiberdock_freesasa-1379538.out`
+- `tmp/agent/20260722-benchmark-bm55/cpu_multiprot_fiberdock_freesasa-1379544.err`
+- `tmp/agent/20260722-benchmark-bm55/cpu_multiprot_fiberdock_freesasa-1379544.out`
+- `tmp/agent/20260722-benchmark-bm55/cpu_multiprot_fiberdock_naccess-1379417.err`
+- `tmp/agent/20260722-benchmark-bm55/cpu_multiprot_fiberdock_naccess-1379417.out`
+- `tmp/agent/20260722-benchmark-bm55/cpu_multiprot_fiberdock_naccess-1379481.err`
+- `tmp/agent/20260722-benchmark-bm55/cpu_multiprot_fiberdock_naccess-1379481.out`
+- `tmp/agent/20260722-benchmark-bm55/cpu_multiprot_fiberdock_naccess-1379537.err`
+- `tmp/agent/20260722-benchmark-bm55/cpu_multiprot_fiberdock_naccess-1379537.out`
+- `tmp/agent/20260722-benchmark-bm55/cpu_multiprot_fiberdock_naccess-1379543.err`
+- `tmp/agent/20260722-benchmark-bm55/cpu_multiprot_fiberdock_naccess-1379543.out`
+- `tmp/agent/20260722-benchmark-bm55/gtalign-gpu-test-1381548.err`
+- `tmp/agent/20260722-benchmark-bm55/gtalign-gpu-test-1381548.out`
+- `tmp/agent/20260722-benchmark-bm55/gtalign_gpu_pipeline.sbatch`
+- `tmp/agent/20260722-benchmark-bm55/gtalign_gpu_test.sbatch`
+- `tmp/agent/20260722-benchmark-bm55/gtgpu-1381568.err`
+- `tmp/agent/20260722-benchmark-bm55/gtgpu-1381568.out`
+- `tmp/agent/20260722-benchmark-bm55/gtgpu-1382510.err`
+- `tmp/agent/20260722-benchmark-bm55/gtgpu-1382510.out`

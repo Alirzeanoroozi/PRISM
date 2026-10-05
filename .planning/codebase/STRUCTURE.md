@@ -32,7 +32,7 @@
 - `tmp/agent/`, `processed/`, `templates/`, `logs/` — generated run state and
   artifacts. They are operational evidence or scratch, not normal source
   modules; use isolated run subdirectories.
-- `.planning/` — learnship project state and codebase reference documents.
+- `.planning/` — project planning state and codebase reference documents.
 
 ## Naming and path conventions
 

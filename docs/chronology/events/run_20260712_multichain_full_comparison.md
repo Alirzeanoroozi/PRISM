@@ -1,0 +1,51 @@
+# 2026-07-12: 20260712-multichain-full-comparison
+
+- Event ID: `run_20260712_multichain_full_comparison`
+- Kind: `run`
+- Source: `tmp/agent/20260712-multichain-full-comparison`
+- Date evidence: `tmp/agent directory prefix`
+- Recorded status: `no_terminal_status`
+- Excluded vendor/cache files under this source: 0
+
+## Selected evidence paths
+
+- `tmp/agent/20260712-multichain-full-comparison/FINAL_REPORT.md`
+- `tmp/agent/20260712-multichain-full-comparison/score-1345453.err`
+- `tmp/agent/20260712-multichain-full-comparison/score-1345453.out`
+- `tmp/agent/20260712-multichain-full-comparison/score-1345454.err`
+- `tmp/agent/20260712-multichain-full-comparison/score-1345454.out`
+- `tmp/agent/20260712-multichain-full-comparison/score-1345459.err`
+- `tmp/agent/20260712-multichain-full-comparison/score-1345459.out`
+- `tmp/agent/20260712-multichain-full-comparison/slurm-1344964_1.err`
+- `tmp/agent/20260712-multichain-full-comparison/slurm-1344964_1.out`
+- `tmp/agent/20260712-multichain-full-comparison/slurm-1344964_10.err`
+- `tmp/agent/20260712-multichain-full-comparison/slurm-1344964_10.out`
+- `tmp/agent/20260712-multichain-full-comparison/slurm-1344964_11.err`
+- `tmp/agent/20260712-multichain-full-comparison/slurm-1344964_11.out`
+- `tmp/agent/20260712-multichain-full-comparison/slurm-1344964_12.err`
+- `tmp/agent/20260712-multichain-full-comparison/slurm-1344964_12.out`
+- `tmp/agent/20260712-multichain-full-comparison/slurm-1344964_2.err`
+- `tmp/agent/20260712-multichain-full-comparison/slurm-1344964_2.out`
+- `tmp/agent/20260712-multichain-full-comparison/slurm-1344964_3.err`
+- `tmp/agent/20260712-multichain-full-comparison/slurm-1344964_3.out`
+- `tmp/agent/20260712-multichain-full-comparison/slurm-1344964_4.err`
+- `tmp/agent/20260712-multichain-full-comparison/slurm-1344964_4.out`
+- `tmp/agent/20260712-multichain-full-comparison/slurm-1344964_5.err`
+- `tmp/agent/20260712-multichain-full-comparison/slurm-1344964_5.out`
+- `tmp/agent/20260712-multichain-full-comparison/slurm-1344964_6.err`
+- `tmp/agent/20260712-multichain-full-comparison/slurm-1344964_6.out`
+- `tmp/agent/20260712-multichain-full-comparison/slurm-1344964_7.err`
+- `tmp/agent/20260712-multichain-full-comparison/slurm-1344964_7.out`
+- `tmp/agent/20260712-multichain-full-comparison/slurm-1344964_8.err`
+- `tmp/agent/20260712-multichain-full-comparison/slurm-1344964_8.out`
+- `tmp/agent/20260712-multichain-full-comparison/slurm-1344964_9.err`
+- `tmp/agent/20260712-multichain-full-comparison/slurm-1344964_9.out`
+- `tmp/agent/20260712-multichain-full-comparison/slurm-1344965_1.err`
+- `tmp/agent/20260712-multichain-full-comparison/slurm-1344965_1.out`
+- `tmp/agent/20260712-multichain-full-comparison/slurm-1344965_2.err`
+- `tmp/agent/20260712-multichain-full-comparison/slurm-1344965_2.out`
+- `tmp/agent/20260712-multichain-full-comparison/slurm-1344965_3.err`
+- `tmp/agent/20260712-multichain-full-comparison/slurm-1344965_3.out`
+- `tmp/agent/20260712-multichain-full-comparison/slurm-1344965_4.err`
+- `tmp/agent/20260712-multichain-full-comparison/slurm-1344965_4.out`
+- `tmp/agent/20260712-multichain-full-comparison/slurm-1344965_5.err`

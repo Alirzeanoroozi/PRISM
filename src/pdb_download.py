@@ -119,8 +119,10 @@ def pdb_downloader(inputs_csv=None):
             print(f"Skipping target pair {row['Receptor']}, {row['Ligand']}: {exc}")
             continue
     
-    # Download and process PDBs
-    for target in list(set(receptor_targets + ligand_targets)):
+    # Download and process PDBs.  Keep the first-seen order: callers use the
+    # two returned lists as parallel receptor/ligand pair lists.
+    ordered_targets = list(dict.fromkeys(receptor_targets + ligand_targets))
+    for target in ordered_targets:
         if not os.path.exists(f"{TARGET_DIR}/{target[:4].lower()}.pdb"):
             if not download_pdb_file(target[:4].lower(), TARGET_DIR):
                 print(f"Failed to download PDB {target}")
@@ -128,14 +130,16 @@ def pdb_downloader(inputs_csv=None):
         else:
             print(f"PDB {target} already exists")
 
-    for target in sorted(set(receptor_targets + ligand_targets)):
+    for target in ordered_targets:
         if os.path.exists(f"{TARGET_DIR}/{target[:4].lower()}.pdb"):
             materialize_target_pdb(target)
     for raw_target in raw_targets:
         source = f"{TARGET_DIR}/{normalize_target_id(raw_target)[:4]}.pdb"
         if os.path.exists(source):
             materialize_target_pdb(raw_target, source_path=source)
-    return list(set(receptor_targets)), list(set(ligand_targets))
+    # Preserve CSV row order and receptor/ligand pairing for downstream
+    # alignment and transformation stages.
+    return receptor_targets, ligand_targets
 
 if __name__ == "__main__":
     pdb_downloader()

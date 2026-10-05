@@ -32,6 +32,7 @@ import json
 import os
 import platform
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -130,16 +131,32 @@ def _get_git_provenance(cwd: Path | None = None) -> dict[str, Any]:
             ["git", "rev-parse", "--abbrev-ref", "HEAD"], **kwargs, **cwd_arg
         ).stdout.strip()
         status = subprocess.run(["git", "status", "--short"], **kwargs, **cwd_arg).stdout.strip()
+        tracked_diff = subprocess.run(
+            ["git", "diff", "HEAD", "--binary"], **kwargs, **cwd_arg
+        ).stdout
+        index_diff = subprocess.run(
+            ["git", "diff", "--cached", "--binary"], **kwargs, **cwd_arg
+        ).stdout
+        untracked = [
+            line for line in status.splitlines()
+            if line.startswith("?? ")
+        ]
         is_dirty = bool(status)
         diff_hash = hashlib.sha256(status.encode("utf-8")).hexdigest() if is_dirty else None
         return {
             "head_commit": head,
             "is_dirty": is_dirty,
-            "status_short": status[:500] if status else "",
+            "status_short": status,
             "head_short": head_short,
             "branch": branch if branch != "HEAD" else None,
             "diff_hash": diff_hash,
-            "declared_untracked_files": [],
+            "tracked_diff_hash": hashlib.sha256(tracked_diff.encode("utf-8")).hexdigest(),
+            "index_diff_hash": hashlib.sha256(index_diff.encode("utf-8")).hexdigest(),
+            "untracked_manifest_hash": hashlib.sha256(
+                "\n".join(untracked).encode("utf-8")
+            ).hexdigest(),
+            "untracked_count": len(untracked),
+            "declared_untracked_files": untracked,
         }
     except Exception:
         return {
@@ -153,20 +170,24 @@ def _get_git_provenance(cwd: Path | None = None) -> dict[str, Any]:
         }
 
 
-def _get_external_tools() -> list[dict[str, Any]]:
-    """Probe configured external tools."""
+def _get_external_tools(cwd: Path | None = None) -> list[dict[str, Any]]:
+    """Record configured external-tool paths and hashes without executing them."""
     candidates = [
-        ("TMalign", ["which", "TMalign"]),
-        ("GTalign", ["which", "GTalign"]),
-        ("MultiProt", ["which", "MultiProt"]),
-        ("NACCESS", ["which", "naccess"]),
+        ("TMalign", "PRISM_TMALIGN", "external_tools/TMalign", "TMalign"),
+        ("GTalign", "PRISM_GTALIGN", "gtalign", "gtalign"),
+        ("MultiProt", "PRISM_MULTIPROT", "external_tools/multiprot.Linux", "MultiProt"),
+        ("NACCESS", "PRISM_NACCESS_EXECUTABLE", "external_tools/naccess/naccess", "naccess"),
     ]
     tools: list[dict[str, Any]] = []
-    for name, probe_cmd in candidates:
+    root = cwd or Path.cwd()
+    for name, env_key, default, probe_name in candidates:
         try:
-            result = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=5)
-            resolved = result.stdout.strip()
-            ok = result.returncode == 0 and bool(resolved)
+            configured = os.environ.get(env_key, default)
+            candidate = Path(configured)
+            if not candidate.is_absolute():
+                candidate = root / candidate
+            resolved = str(candidate.resolve()) if candidate.is_file() else shutil.which(configured) or shutil.which(probe_name) or ""
+            ok = bool(resolved and Path(resolved).is_file())
             the_hash = sha256_file(resolved) if ok and Path(resolved).is_file() else None
             tools.append({
                 "name": name,
@@ -187,6 +208,8 @@ def _get_slurm_info() -> dict[str, Any] | None:
     nodelist = os.environ.get("SLURM_NODELIST")
     return {
         "job_id": os.environ.get("SLURM_JOB_ID"),
+        "array_job_id": os.environ.get("SLURM_ARRAY_JOB_ID"),
+        "array_task_id": os.environ.get("SLURM_ARRAY_TASK_ID"),
         "job_name": os.environ.get("SLURM_JOB_NAME"),
         "partition": os.environ.get("SLURM_JOB_PARTITION"),
         "qos": os.environ.get("SLURM_JOB_QOS"),
@@ -196,6 +219,35 @@ def _get_slurm_info() -> dict[str, Any] | None:
         "mem_per_node": os.environ.get("SLURM_MEM_PER_NODE"),
         "time_limit": os.environ.get("SLURM_TIME_LIMIT"),
         "submit_dir": os.environ.get("SLURM_SUBMIT_DIR"),
+    }
+
+
+_SAFE_ENVIRONMENT_KEYS = {
+    "CONDA_DEFAULT_ENV",
+    "CONDA_PREFIX",
+    "HOSTNAME",
+    "PATH",
+    "PRISM_PIPELINE_PYTHON",
+    "PYTHONPATH",
+    "VIRTUAL_ENV",
+}
+
+
+def _environment_identity(environment: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Record environment identity without serialising credentials or secrets."""
+    values = dict(environment if environment is not None else os.environ)
+    selected = {
+        key: str(values[key])
+        for key in sorted(values)
+        if key in _SAFE_ENVIRONMENT_KEYS
+        and not any(token in key.upper() for token in ("SECRET", "PASSWORD", "TOKEN", "KEY"))
+    }
+    return {
+        "selected": selected,
+        "python_executable": sys.executable,
+        "python_executable_sha256": sha256_file(sys.executable),
+        "environment_key_count": len(values),
+        "environment_key_hash": canonical_hash(sorted(values)),
     }
 
 
@@ -255,6 +307,7 @@ def build_execution_attempt(
     command: Iterable[Any] | None = None,
     working_directory: str | os.PathLike[str] | None = None,
     environment: Mapping[str, Any] | None = None,
+    output_root: str | os.PathLike[str] | None = None,
     slurm: Mapping[str, Any] | None = None,
     parent_run_id: str | None = None,
     supersedes_reason: str | None = None,
@@ -283,6 +336,7 @@ def build_execution_attempt(
         "manifest_version": "1.0",
         "run_identity": {
             "run_id": rid,
+            "attempt_id": rid,
             "created_at": _iso_now(),
             "host": os.uname().nodename,
             "user": os.environ.get("USER", os.environ.get("USERNAME", "unknown")),
@@ -294,10 +348,11 @@ def build_execution_attempt(
         "runtime_context": {
             "command_argv": _redact_argv(command or ()),
             "working_directory": str(Path(working_directory or Path.cwd()).resolve()),
-            "environment": _normalize_mapping(environment or {}),
+            "output_root": str(Path(output_root or working_directory or Path.cwd()).resolve()),
+            "environment": _environment_identity(environment),
             "python_version": py_ver,
             "package_versions": pkgs,
-            "external_tools": _get_external_tools(),
+            "external_tools": _get_external_tools(Path(working_directory or Path.cwd()).resolve()),
             "git_provenance": _get_git_provenance(Path(working_directory or Path.cwd()).resolve()),
             "slurm": _get_slurm_info() if slurm is None else _normalize_mapping(slurm),
             "seeds": {},
