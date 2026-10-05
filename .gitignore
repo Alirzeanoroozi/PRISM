@@ -59,3 +59,12 @@ template_files/
 **/*_env/
 **/*-env/
 **/copilot-home/
+
+# VALAR-managed local-only / generated-content exclusions
+Gdrive/
+gdrive/
+graphify-out/
+*.py[cod]
+.venv/
+venv/
+site-packages/

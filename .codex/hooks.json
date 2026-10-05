@@ -1,0 +1,54 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"/home/rshadi25/valar-agent-framework/scripts/valar-repo-sync-event.py\" session-start --repo-root \"$(git rev-parse --show-toplevel)\"",
+            "async": true,
+            "timeout": 300
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|apply_patch|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"/home/rshadi25/valar-agent-framework/scripts/valar-repo-sync-event.py\" post-tool-use --repo-root \"$(git rev-parse --show-toplevel)\"",
+            "async": true,
+            "timeout": 300
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"/home/rshadi25/valar-agent-framework/scripts/valar-repo-sync-event.py\" stop --repo-root \"$(git rev-parse --show-toplevel)\"",
+            "async": true,
+            "timeout": 300
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"/home/rshadi25/valar-agent-framework/scripts/valar-repo-sync-event.py\" session-end --repo-root \"$(git rev-parse --show-toplevel)\"",
+            "async": false,
+            "timeout": 300
+          }
+        ]
+      }
+    ]
+  }
+}
